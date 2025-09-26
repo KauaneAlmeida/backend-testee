@@ -32,16 +32,6 @@ class IntelligentHybridOrchestrator:
         self.gemini_available = True
         self.gemini_timeout = 15.0
         self.law_firm_number = "+5511918368812"
-        self.schema_flow_cache = None
-        self.cache_timestamp = None
-
-        # Lista de respostas inválidas comuns para evitar pulos
-        self.invalid_responses = {
-            'greetings': ['oi', 'olá', 'ola', 'hello', 'hi', 'hey', 'e ai', 'eai', 'opa'],
-            'short_responses': ['ok', 'sim', 'não', 'nao', 'yes', 'no', 'k', 'kk', 'kkk'],
-            'test_responses': ['teste', 'test', '123', 'abc', 'aaa', 'bbb', 'ccc', 'xxx'],
-            'generic': ['p.o.', 'po', 'p.o', '.', '..', '...', 'a', 'aa', 'bb', 'cc']
-        }
 
     def _format_brazilian_phone(self, phone_clean: str) -> str:
         """Format Brazilian phone number correctly for WhatsApp."""
@@ -50,11 +40,9 @@ class IntelligentHybridOrchestrator:
                 return ""
             phone_clean = ''.join(filter(str.isdigit, str(phone_clean)))
 
-            # Remove existing country code
             if phone_clean.startswith("55"):
                 phone_clean = phone_clean[2:]
 
-            # Normalize lengths
             if len(phone_clean) == 8:
                 return f"55{phone_clean}"
             if len(phone_clean) == 9:
@@ -71,33 +59,365 @@ class IntelligentHybridOrchestrator:
                 return f"55{ddd}{number}"
             return f"55{phone_clean}"
         except Exception as e:
-            logger.error(f"❌ Error formatting phone number {phone_clean}: {str(e)}")
+            logger.error(f"Error formatting phone number {phone_clean}: {str(e)}")
             return f"55{phone_clean if phone_clean else ''}"
 
-    def _is_invalid_response(self, response: str, context: str = "general") -> bool:
-        if not response or not response.strip():
-            return True
-            
-        response_lower = response.lower().strip()
+    def _get_personalized_greeting(self, phone_number: Optional[str] = None, session_id: str = "", user_name: str = "") -> str:
+        """
+        🎯 MENSAGEM INICIAL ESTRATÉGICA OTIMIZADA
         
-        # Respostas muito curtas (menos de 2 caracteres)
-        if len(response_lower) < 2:
-            return True
+        Elementos psicológicos para conversão:
+        ✅ Autoridade (escritório especializado, resultados)
+        ✅ Urgência suave (situações que não podem esperar)
+        ✅ Personalização (horário do dia)
+        ✅ Prova social (milhares de casos)
+        ✅ Benefício claro (solução rápida e eficaz)
+        ✅ Call-to-action natural
+        """
+        now = datetime.now()
+        hour = now.hour
+        
+        if 5 <= hour < 12:
+            greeting = "Bom dia"
+        elif 12 <= hour < 18:
+            greeting = "Boa tarde"
+        else:
+            greeting = "Boa noite"
+        
+        # 🎯 MENSAGEM ESTRATÉGICA ÚNICA que funciona para ambas as plataformas
+        strategic_greeting = f"""{greeting}! 👋
+
+Bem-vindo ao m.lima Advogados Associados.
+
+Você está no lugar certo! Somos especialistas em Direito Penal e da Saúde, com mais de 1000 casos resolvidos e uma equipe experiente pronta para te ajudar.
+
+💼 Sabemos que questões jurídicas podem ser urgentes e complexas, por isso oferecemos:
+• Atendimento ágil e personalizado
+• Estratégias focadas em resultados
+• Acompanhamento completo do seu caso
+
+Para que eu possa direcionar você ao advogado especialista ideal e acelerar a solução do seu caso, preciso conhecer um pouco mais sobre sua situação.
+
+Qual é o seu nome completo? 😊"""
+        
+        return strategic_greeting
+
+    def _get_strategic_whatsapp_message(self, user_name: str, area: str, phone_formatted: str) -> str:
+        """
+        🎯 MENSAGEM ESTRATÉGICA OTIMIZADA PARA CONVERSÃO
+        
+        Elementos psicológicos incluídos:
+        ✅ Urgência (minutos, tempo limitado)
+        ✅ Autoridade (equipe especializada, experiente) 
+        ✅ Prova social (dezenas de casos resolvidos)
+        ✅ Exclusividade (atenção personalizada)
+        ✅ Benefício claro (resultados, agilidade)
+        """
+        first_name = user_name.split()[0] if user_name else "Cliente"
+        
+        # Personalizar por área jurídica
+        area_messages = {
+            "penal": {
+                "expertise": "Nossa equipe especializada em Direito Penal já resolveu centenas de casos similares",
+                "urgency": "Sabemos que situações criminais precisam de atenção IMEDIATA",
+                "benefit": "proteger seus direitos e buscar o melhor resultado possível"
+            },
+            "saude": {
+                "expertise": "Nossos advogados especialistas em Direito da Saúde têm expertise em ações contra planos",
+                "urgency": "Questões de saúde não podem esperar",
+                "benefit": "garantir seu tratamento e obter as coberturas devidas"
+            },
+            "default": {
+                "expertise": "Nossa equipe jurídica experiente",
+                "urgency": "Sua situação precisa de atenção especializada",
+                "benefit": "alcançar a solução mais eficaz para seu caso"
+            }
+        }
+        
+        # Detectar área
+        area_key = "default"
+        if any(word in area.lower() for word in ["penal", "criminal", "crime"]):
+            area_key = "penal"
+        elif any(word in area.lower() for word in ["saude", "saúde", "plano", "medic"]):
+            area_key = "saude"
             
-        # Apenas números muito pequenos
-        if response_lower.isdigit() and len(response_lower) < 4:
-            return True
+        msgs = area_messages[area_key]
+        
+        strategic_message = f"""🚀 {first_name}, uma EXCELENTE notícia!
+
+✅ Seu atendimento foi PRIORIZADO no sistema m.lima
+
+{msgs['expertise']} com resultados comprovados e já foi IMEDIATAMENTE notificada sobre seu caso.
+
+🎯 {msgs['urgency']} - por isso um advogado experiente entrará em contato com você nos PRÓXIMOS MINUTOS.
+
+🏆 DIFERENCIAL m.lima:
+• ⚡ Atendimento ágil e personalizado
+• 🎯 Estratégia focada em RESULTADOS
+• 📋 Acompanhamento completo do processo
+• 💪 Equipe com vasta experiência
+
+Você fez a escolha certa ao confiar no m.lima para {msgs['benefit']}.
+
+⏰ Aguarde nossa ligação - sua situação está em excelentes mãos!
+
+---
+✉️ m.lima Advogados Associados
+📱 Contato prioritário ativado"""
+
+        return strategic_message
+
+    async def should_notify_lawyers(self, session_data: Dict[str, Any], platform: str) -> Dict[str, Any]:
+        """
+        🧠 LÓGICA INTELIGENTE DE NOTIFICAÇÃO
+        
+        Decide quando notificar advogados baseado na plataforma e qualificação do lead
+        Evita notificações prematuras e spam para a equipe jurídica
+        """
+        try:
+            # Verificar se já foram notificados
+            if session_data.get("lawyers_notified", False):
+                return {
+                    "should_notify": False,
+                    "reason": "already_notified",
+                    "message": "Advogados já foram notificados anteriormente"
+                }
             
-        # Apenas caracteres repetidos
-        if len(set(response_lower.replace(' ', ''))) <= 2 and len(response_lower) < 4:
-            return True
+            lead_data = session_data.get("lead_data", {})
+            message_count = session_data.get("message_count", 0)
+            current_step = session_data.get("current_step", "")
+            flow_completed = session_data.get("flow_completed", False)
             
-        # Verificar listas de respostas inválidas
-        all_invalid = []
-        for category in self.invalid_responses.values():
-            all_invalid.extend(category)
+            # CRITÉRIOS POR PLATAFORMA
+            if platform == "web":
+                # Web Chat - critérios mais rigorosos (usuário já completou fluxo na página)
+                required_fields = ["identification", "contact_info", "area_qualification", "case_details"]
+                has_required_fields = all(lead_data.get(field) for field in required_fields)
+                
+                criteria_met = (
+                    flow_completed and 
+                    has_required_fields and
+                    len(lead_data.get("identification", "").strip()) >= 3 and  # Nome mínimo
+                    len(lead_data.get("case_details", "").strip()) >= 15  # Detalhes mínimos
+                )
+                
+                qualification_score = self._calculate_qualification_score(lead_data, platform)
+                
+                if criteria_met and qualification_score >= 0.8:
+                    return {
+                        "should_notify": True,
+                        "reason": "web_flow_completed",
+                        "qualification_score": qualification_score,
+                        "message": f"Lead web qualificado - Score: {qualification_score:.2f}"
+                    }
+                
+            elif platform == "whatsapp":
+                # WhatsApp - critérios adaptados para conversação mais natural
+                required_fields = ["identification", "contact_info", "area_qualification"]
+                has_required_fields = all(lead_data.get(field) for field in required_fields)
+                
+                # Critérios para WhatsApp
+                engagement_criteria = (
+                    message_count >= 4 and  # Pelo menos 4 interações
+                    has_required_fields and
+                    len(lead_data.get("identification", "").strip()) >= 3 and  # Nome válido
+                    len(lead_data.get("area_qualification", "").strip()) >= 3  # Área identificada
+                )
+                
+                # Verificar se chegou no step de detalhes ou confirmação
+                advanced_step = current_step in ["step4_details", "step5_confirmation", "completed"]
+                
+                qualification_score = self._calculate_qualification_score(lead_data, platform)
+                
+                if engagement_criteria and advanced_step and qualification_score >= 0.7:
+                    return {
+                        "should_notify": True,
+                        "reason": "whatsapp_qualified",
+                        "qualification_score": qualification_score,
+                        "engagement_level": message_count,
+                        "current_step": current_step,
+                        "message": f"Lead WhatsApp qualificado - Score: {qualification_score:.2f}, Step: {current_step}"
+                    }
             
-        return response_lower in all_invalid
+            # Não qualificado ainda
+            return {
+                "should_notify": False,
+                "reason": "not_qualified_yet",
+                "qualification_score": self._calculate_qualification_score(lead_data, platform),
+                "missing_criteria": self._get_missing_criteria(session_data, platform),
+                "message": "Lead ainda não atingiu critérios de qualificação"
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao avaliar notificação: {str(e)}")
+            return {
+                "should_notify": False,
+                "reason": "evaluation_error",
+                "error": str(e),
+                "message": "Erro na avaliação - não notificando por segurança"
+            }
+
+    def _calculate_qualification_score(self, lead_data: Dict[str, Any], platform: str) -> float:
+        """Calcula score de qualificação do lead (0.0 a 1.0)"""
+        try:
+            score = 0.0
+            
+            # Nome completo (0.2)
+            name = lead_data.get("identification", "").strip()
+            if len(name) >= 3:
+                score += 0.1
+            if len(name.split()) >= 2:  # Nome e sobrenome
+                score += 0.1
+                
+            # Informações de contato (0.3)
+            contact = lead_data.get("contact_info", "").strip()
+            if contact:
+                score += 0.1
+                # Verificar se tem telefone
+                if re.search(r'\d{10,11}', contact):
+                    score += 0.1
+                # Verificar se tem email
+                if re.search(r'\S+@\S+\.\S+', contact):
+                    score += 0.1
+            
+            # Área jurídica identificada (0.2)
+            area = lead_data.get("area_qualification", "").strip()
+            if area:
+                score += 0.1
+                # Áreas específicas que atendemos
+                if any(keyword in area.lower() for keyword in ["penal", "saude", "saúde", "criminal", "plano"]):
+                    score += 0.1
+            
+            # Detalhes do caso (0.3)
+            details = lead_data.get("case_details", "").strip()
+            if details:
+                score += 0.1
+                if len(details) >= 20:  # Detalhes substanciais
+                    score += 0.1
+                if len(details) >= 50:  # Detalhes completos
+                    score += 0.1
+            
+            return min(score, 1.0)  # Máximo 1.0
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular score: {str(e)}")
+            return 0.0
+
+    def _get_missing_criteria(self, session_data: Dict[str, Any], platform: str) -> list:
+        """Identifica critérios faltantes para qualificação"""
+        missing = []
+        lead_data = session_data.get("lead_data", {})
+        
+        if not lead_data.get("identification"):
+            missing.append("nome_completo")
+        if not lead_data.get("contact_info"):
+            missing.append("informacoes_contato")
+        if not lead_data.get("area_qualification"):
+            missing.append("area_juridica")
+            
+        if platform == "web":
+            if not lead_data.get("case_details"):
+                missing.append("detalhes_caso")
+            if not session_data.get("flow_completed"):
+                missing.append("fluxo_incompleto")
+        elif platform == "whatsapp":
+            if session_data.get("message_count", 0) < 4:
+                missing.append("engajamento_insuficiente")
+                
+        return missing
+
+    async def notify_lawyers_if_qualified(self, session_id: str, session_data: Dict[str, Any], platform: str) -> Dict[str, Any]:
+        """
+        🎯 MÉTODO PRINCIPAL DE NOTIFICAÇÃO INTELIGENTE
+        
+        Avalia se deve notificar e executa a notificação se qualificado
+        """
+        try:
+            # Avaliar se deve notificar
+            notification_check = await self.should_notify_lawyers(session_data, platform)
+            
+            if not notification_check["should_notify"]:
+                logger.info(f"📊 Não notificando advogados - Session: {session_id} | Razão: {notification_check['reason']}")
+                return {
+                    "notified": False,
+                    "reason": notification_check["reason"],
+                    "details": notification_check
+                }
+            
+            # 🚀 LEAD QUALIFICADO - NOTIFICAR ADVOGADOS
+            lead_data = session_data.get("lead_data", {})
+            user_name = lead_data.get("identification", "Lead Qualificado")
+            area = lead_data.get("area_qualification", "não especificada")
+            case_details = lead_data.get("case_details", "aguardando mais detalhes")
+            contact_info = lead_data.get("contact_info", "")
+            
+            # Extrair telefone
+            phone_clean = lead_data.get("phone", "")
+            if not phone_clean:
+                phone_match = re.search(r'(\d{10,11})', contact_info or "")
+                phone_clean = phone_match.group(1) if phone_match else ""
+            
+            logger.info(f"🚀 NOTIFICANDO ADVOGADOS - Session: {session_id} | Lead: {user_name} | Área: {area} | Platform: {platform}")
+            
+            try:
+                notification_result = await lawyer_notification_service.notify_lawyers_of_new_lead(
+                    lead_name=user_name,
+                    lead_phone=phone_clean,
+                    category=area,
+                    additional_info={
+                        "case_details": case_details,
+                        "contact_info": contact_info,
+                        "email": lead_data.get("email", ""),
+                        "urgency": "high" if platform == "whatsapp" else "normal",
+                        "platform": platform,
+                        "qualification_score": notification_check.get("qualification_score", 0),
+                        "session_id": session_id,
+                        "engagement_level": session_data.get("message_count", 0),
+                        "current_step": session_data.get("current_step", ""),
+                        "lead_source": f"{platform}_qualified_lead"
+                    }
+                )
+                
+                if notification_result.get("success"):
+                    # Marcar como notificado
+                    session_data["lawyers_notified"] = True
+                    session_data["lawyers_notified_at"] = ensure_utc(datetime.now(timezone.utc))
+                    await save_user_session(session_id, session_data)
+                    
+                    logger.info(f"✅ Advogados notificados com sucesso - Session: {session_id}")
+                    
+                    return {
+                        "notified": True,
+                        "success": True,
+                        "platform": platform,
+                        "qualification_score": notification_check.get("qualification_score"),
+                        "notification_result": notification_result
+                    }
+                else:
+                    logger.error(f"❌ Falha na notificação dos advogados - Session: {session_id}")
+                    return {
+                        "notified": True,
+                        "success": False,
+                        "error": "notification_failed",
+                        "details": notification_result
+                    }
+                    
+            except Exception as notification_error:
+                logger.error(f"❌ Erro ao notificar advogados - Session: {session_id}: {str(notification_error)}")
+                return {
+                    "notified": True,
+                    "success": False,
+                    "error": "notification_exception",
+                    "exception": str(notification_error)
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erro na lógica de notificação - Session: {session_id}: {str(e)}")
+            return {
+                "notified": False,
+                "error": "notification_logic_error",
+                "exception": str(e)
+            }
 
     async def get_gemini_health_status(self) -> Dict[str, Any]:
         try:
@@ -108,20 +428,13 @@ class IntelligentHybridOrchestrator:
             ai_orchestrator.clear_session_memory("__health_check__")
             if test_response and isinstance(test_response, str) and test_response.strip():
                 self.gemini_available = True
-                return {"service": "gemini_ai", "status": "active", "available": True, "message": "Gemini AI is operational"}
+                return {"service": "gemini_ai", "status": "active", "available": True}
             else:
                 self.gemini_available = False
-                return {"service": "gemini_ai", "status": "inactive", "available": False, "message": "Gemini AI returned invalid response"}
-        except asyncio.TimeoutError:
-            self.gemini_available = False
-            return {"service": "gemini_ai", "status": "inactive", "available": False, "message": "Gemini AI timeout - likely quota exceeded"}
+                return {"service": "gemini_ai", "status": "inactive", "available": False}
         except Exception as e:
             self.gemini_available = False
-            error_str = str(e).lower()
-            if self._is_quota_error(error_str):
-                return {"service": "gemini_ai", "status": "quota_exceeded", "available": False, "message": f"Gemini API quota exceeded: {str(e)}"}
-            else:
-                return {"service": "gemini_ai", "status": "error", "available": False, "message": f"Gemini AI error: {str(e)}"}
+            return {"service": "gemini_ai", "status": "error", "available": False, "error": str(e)}
 
     async def get_overall_service_status(self) -> Dict[str, Any]:
         try:
@@ -129,12 +442,14 @@ class IntelligentHybridOrchestrator:
             ai_status = await self.get_gemini_health_status()
             firebase_healthy = firebase_status.get("status") == "active"
             ai_healthy = ai_status.get("status") == "active"
+            
             if firebase_healthy and ai_healthy:
                 overall_status = "active"
             elif firebase_healthy:
                 overall_status = "degraded"
             else:
                 overall_status = "error"
+                
             return {
                 "overall_status": overall_status,
                 "firebase_status": firebase_status,
@@ -144,336 +459,97 @@ class IntelligentHybridOrchestrator:
                     "ai_responses": ai_healthy,
                     "fallback_mode": firebase_healthy and not ai_healthy,
                     "whatsapp_integration": True,
-                    "lead_collection": firebase_healthy
+                    "lead_collection": firebase_healthy,
+                    "intelligent_notifications": True
                 },
                 "gemini_available": self.gemini_available,
                 "fallback_mode": not self.gemini_available
             }
         except Exception as e:
-            logger.error(f"❌ Error getting overall service status: {str(e)}")
+            logger.error(f"Error getting overall service status: {str(e)}")
             return {
                 "overall_status": "error",
-                "firebase_status": {"status": "error", "error": str(e)},
-                "ai_status": {"status": "error", "error": str(e)},
-                "features": {"conversation_flow": False, "ai_responses": False, "fallback_mode": False, "whatsapp_integration": False, "lead_collection": False},
-                "gemini_available": False,
-                "fallback_mode": True,
                 "error": str(e)
             }
 
     async def _get_or_create_session(self, session_id: str, platform: str, phone_number: Optional[str] = None) -> Dict[str, Any]:
-        logger.info(f"🔍 DEBUG: Getting/creating session {session_id} for platform {platform}")
+        """Criar ou obter sessão - inicia direto no fluxo"""
+        logger.info(f"Getting/creating session {session_id} for platform {platform}")
         
         session_data = await get_user_session(session_id)
-        logger.info(f"🔍 DEBUG: Existing session data: {session_data is not None}")
         
         if not session_data:
             session_data = {
                 "session_id": session_id,
                 "platform": platform,
                 "created_at": ensure_utc(datetime.now(timezone.utc)),
+                "current_step": "step1_name",  # Começa direto perguntando o nome
                 "lead_data": {},
                 "message_count": 0,
-                "fallback_step": None,  # Começará em None para ser inicializado
+                "flow_completed": False,
                 "phone_submitted": False,
-                "gemini_available": True,
-                "last_gemini_check": None,
-                "fallback_completed": False,
-                "lead_qualified": False,
-                "validation_attempts": {},
-                "session_started": False,
-                "flow_initialized": False  # NOVO CAMPO PARA DEBUG
+                "lawyers_notified": False,  # 🎯 NOVO: Flag para controlar notificações
+                "last_updated": ensure_utc(datetime.now(timezone.utc)),
+                "first_interaction": True
             }
-            logger.info(f"🆕 DEBUG: Created new session {session_id} for platform {platform}")
-        else:
-            logger.info(f"📊 DEBUG: Session state - Step: {session_data.get('fallback_step')}, Started: {session_data.get('session_started')}, Flow initialized: {session_data.get('flow_initialized')}")
+            logger.info(f"Created new session {session_id}")
+            await save_user_session(session_id, session_data)
             
         if phone_number:
             session_data["phone_number"] = phone_number
+            
         return session_data
-
-    def _is_quota_error(self, error_message: str) -> bool:
-        quota_indicators = ["429", "quota", "rate limit", "exceeded", "resourceexhausted", "billing", "plan", "free tier", "requests per day"]
-        return any(indicator in str(error_message).lower() for indicator in quota_indicators)
 
     def _is_phone_number(self, message: str) -> bool:
         clean_message = ''.join(filter(str.isdigit, (message or "")))
         return 10 <= len(clean_message) <= 13
 
-    async def _get_schema_flow(self) -> Dict[str, Any]:
-        """CORREÇÃO: Usar flow simplificado e hardcoded para evitar problemas de Firebase"""
-        logger.info("🔍 DEBUG: Loading schema flow")
-        
-        try:
-            # Usar flow hardcoded para garantir funcionamento
-            hardcoded_flow = {
-                "enabled": True,
-                "sequential": True,
-                "steps": [
-                    {
-                        "id": 1, 
-                        "field": "identification", 
-                        "question": "Olá! Seja bem-vindo ao m.lima. Estou aqui para entender seu caso e agilizar o contato com um de nossos advogados especializados.\n\nPara começar, qual é o seu nome completo?", 
-                        "validation": {"min_length": 2, "min_words": 1, "required": True, "type": "name", "strict": True}, 
-                        "error_message": "Por favor, informe seu nome completo (nome e sobrenome). Exemplo: João Silva"
-                    },
-                    {
-                        "id": 2, 
-                        "field": "contact_info", 
-                        "question": "Prazer em conhecê-lo, {user_name}! Agora preciso de algumas informações de contato:\n\n📱 Qual o melhor telefone/WhatsApp para contato?\n📧 Você poderia informar seu e-mail também?", 
-                        "validation": {"min_length": 10, "required": True, "type": "contact_combined", "strict": True}, 
-                        "error_message": "Por favor, informe seu telefone (com DDD) e e-mail. Exemplo: (11) 99999-9999 - joao@email.com"
-                    },
-                    {
-                        "id": 3, 
-                        "field": "area_qualification", 
-                        "question": "Perfeito, {user_name}! Com qual área do direito você precisa de ajuda?\n\n• Penal\n• Saúde (ações e liminares médicas)", 
-                        "validation": {"min_length": 3, "required": True, "type": "area", "strict": True}, 
-                        "error_message": "Por favor, escolha uma das áreas disponíveis: Penal ou Saúde (liminares médicas)."
-                    },
-                    {
-                        "id": 4, 
-                        "field": "case_details", 
-                        "question": "Entendi, {user_name}. Me diga de forma breve sobre sua situação em {area}:\n\n• O caso já está em andamento na justiça ou é uma situação inicial?\n• Existe algum prazo ou audiência marcada?\n• Em qual cidade ocorreu/está ocorrendo?", 
-                        "validation": {"min_length": 20, "min_words": 5, "required": True, "type": "case_description", "strict": True}, 
-                        "error_message": "Por favor, me conte mais detalhes sobre sua situação. Preciso de pelo menos 20 caracteres para entender seu caso adequadamente."
-                    },
-                    {
-                        "id": 5, 
-                        "field": "lead_warming", 
-                        "question": "Obrigado por compartilhar, {user_name}. Casos como o seu em {area} exigem atenção imediata para evitar complicações.\n\nNossos advogados já atuaram em dezenas de casos semelhantes com ótimos resultados. Vou registrar os principais pontos para que o advogado responsável já entenda sua situação e agilize a solução.\n\nEm instantes você será direcionado para um de nossos especialistas. Está tudo certo?", 
-                        "validation": {"min_length": 1, "required": True, "type": "confirmation", "strict": False}, 
-                        "error_message": "Por favor, confirme se posso prosseguir com o direcionamento. Digite 'sim' ou 'não'."
-                    }
-                ],
-                "completion_message": "Perfeito, {user_name}! Um de nossos advogados especialistas em {area} já vai assumir seu atendimento em instantes.\n\nEnquanto isso, fique tranquilo - você está em boas mãos! 🤝\n\nSuas informações foram registradas e o advogado já terá todo o contexto do seu caso."
+    def _get_flow_steps(self) -> Dict[str, Dict]:
+        """Fluxo humanizado e conversacional"""
+        return {
+            "step1_name": {
+                "question": "Para que eu possa te ajudar da melhor forma, me diga qual é o seu nome completo? 😊",
+                "field": "identification",
+                "next_step": "step2_contact"
+            },
+            "step2_contact": {
+                "question": "Prazer em conhecê-lo, {user_name}! 🤝\n\nAgora preciso de suas informações de contato para darmos continuidade:\n\n📱 Qual seu melhor WhatsApp?\n📧 E seu e-mail principal?\n\nPode me passar essas duas informações?",
+                "field": "contact_info",
+                "next_step": "step3_area"
+            },
+            "step3_area": {
+                "question": "Perfeito, {user_name}! 👍\n\nEm qual área do direito você precisa de nossa ajuda?\n\n⚖️ Direito Penal (crimes, investigações, defesas)\n🏥 Direito da Saúde (planos de saúde, ações médicas, liminares)\n\nQual dessas áreas tem a ver com sua situação?",
+                "field": "area_qualification",
+                "next_step": "step4_details"
+            },
+            "step4_details": {
+                "question": "Entendi, {user_name}. 💼\n\nPara nossos advogados já terem uma visão completa, me conte:\n\n• Sua situação já está na justiça ou é algo que acabou de acontecer?\n• Tem algum prazo urgente ou audiência marcada?\n• Em que cidade isso está ocorrendo?\n\nFique à vontade para me contar os detalhes! 🤝",
+                "field": "case_details",
+                "next_step": "step5_confirmation"
+            },
+            "step5_confirmation": {
+                "question": "Obrigado por todos esses detalhes, {user_name}! 🙏\n\nSituações como a sua realmente precisam de atenção especializada e rápida.\n\nTenho uma excelente notícia: nossa equipe já resolveu dezenas de casos similares com ótimos resultados! ✅\n\nVou registrar tudo para que o advogado responsável já entenda completamente seu caso e possa te ajudar com agilidade.\n\nEm alguns minutos você estará falando diretamente com um especialista. Podemos prosseguir? 🚀",
+                "field": "confirmation",
+                "next_step": "completed"
             }
+        }
+
+    def _validate_answer(self, answer: str, step: str) -> bool:
+        """Validação flexível e humanizada"""
+        if not answer or len(answer.strip()) < 2:
+            return False
             
-            logger.info(f"✅ DEBUG: Schema flow loaded with {len(hardcoded_flow.get('steps', []))} steps")
-            return hardcoded_flow
+        if step == "step1_name":
+            return len(answer.split()) >= 1  # Pelo menos um nome
+        elif step == "step2_contact":
+            return len(answer.strip()) >= 8  # Telefone ou email básico
+        elif step == "step3_area":
+            keywords = ['penal', 'saude', 'saúde', 'criminal', 'liminar', 'medic', 'plano']
+            return any(keyword in answer.lower() for keyword in keywords)
+        elif step == "step4_details":
+            return len(answer.strip()) >= 15  # Detalhes mínimos
             
-        except Exception as e:
-            logger.error(f"❌ DEBUG: Error loading schema flow: {str(e)}")
-            # Return minimal flow if everything fails
-            return {
-                "enabled": True, 
-                "sequential": True, 
-                "steps": [
-                    {"id": 1, "field": "identification", "question": "Qual é o seu nome completo?", "validation": {"required": True}}
-                ], 
-                "completion_message": "Obrigado! Nossa equipe entrará em contato."
-            }
-
-    async def _get_fallback_response(self, session_data: Dict[str, Any], message: str) -> str:
-        """FALLBACK RESPONSE COM LOGS DETALHADOS PARA DEBUG"""
-        try:
-            session_id = session_data["session_id"]
-            platform = session_data.get("platform", "web")
-
-            logger.info(f"🔍 DEBUG: ===== FALLBACK RESPONSE START =====")
-            logger.info(f"🔍 DEBUG: Session: {session_id}, Platform: {platform}")
-            logger.info(f"🔍 DEBUG: Message: '{message}'")
-            logger.info(f"🔍 DEBUG: Current step: {session_data.get('fallback_step')}")
-            logger.info(f"🔍 DEBUG: Session started: {session_data.get('session_started')}")
-            logger.info(f"🔍 DEBUG: Flow initialized: {session_data.get('flow_initialized')}")
-            logger.info(f"🔍 DEBUG: Lead data: {session_data.get('lead_data')}")
-
-            flow = await self._get_schema_flow()
-            steps = flow.get("steps", []) or []
-            steps = sorted(steps, key=lambda x: x.get("id", 0))
-
-            if not steps:
-                logger.error("❌ DEBUG: No steps found in schema flow")
-                return "Olá! Seja bem-vindo ao m.lima. Vamos começar me diz seu nome?"
-
-            logger.info(f"✅ DEBUG: Flow has {len(steps)} steps")
-
-            # Inicializar validation_attempts se não existir
-            if "validation_attempts" not in session_data:
-                session_data["validation_attempts"] = {}
-                logger.info("🔧 DEBUG: Initialized validation_attempts")
-
-            # INICIALIZAÇÃO DO FLUXO
-            if not session_data.get("flow_initialized", False):
-                logger.info("🆕 DEBUG: INITIALIZING FLOW FOR THE FIRST TIME")
-                session_data["fallback_step"] = 1
-                session_data["lead_data"] = {}
-                session_data["fallback_completed"] = False
-                session_data["lead_qualified"] = False
-                session_data["validation_attempts"] = {1: 0}
-                session_data["session_started"] = True
-                session_data["flow_initialized"] = True
-                
-                await save_user_session(session_id, session_data)
-                logger.info("✅ DEBUG: Session initialized and saved")
-                
-                first_step = steps[0] if steps else None
-                if first_step:
-                    response = self._interpolate_message(first_step["question"], {})
-                    logger.info(f"📤 DEBUG: Sending initial question: '{response[:100]}...'")
-                    return response
-                else:
-                    logger.error("❌ DEBUG: No first step found")
-                    return "Olá! Seja bem-vindo ao m.lima. Conte me seu nome completo?"
-
-            # VERIFICAR SE FLUXO JÁ COMPLETADO
-            if session_data.get("fallback_completed", False):
-                user_name = session_data.get("lead_data", {}).get("identification", "")
-                logger.info(f"✅ DEBUG: Flow already completed for user: {user_name}")
-                return f"Obrigado {user_name}! Nossa equipe já foi notificada e entrará em contato em breve. 🤝"
-
-            # OBTER STEP ATUAL
-            current_step_id = session_data.get("fallback_step", 1)
-            lead_data = session_data.get("lead_data", {})
-            validation_attempts = session_data.get("validation_attempts", {})
-
-            logger.info(f"📊 DEBUG: Processing step {current_step_id}")
-            logger.info(f"📊 DEBUG: Lead data so far: {lead_data}")
-            logger.info(f"📊 DEBUG: Validation attempts: {validation_attempts}")
-
-            # Garantir que existe contador para step atual
-            if current_step_id not in validation_attempts:
-                validation_attempts[current_step_id] = 0
-                logger.info(f"🔧 DEBUG: Initialized validation counter for step {current_step_id}")
-
-            current_step = next((s for s in steps if s["id"] == current_step_id), None)
-            if not current_step:
-                logger.error(f"❌ DEBUG: Step {current_step_id} not found, resetting to step 1")
-                session_data["fallback_step"] = 1
-                session_data["validation_attempts"] = {1: 0}
-                await save_user_session(session_id, session_data)
-                first_step = steps[0] if steps else None
-                if first_step:
-                    return self._interpolate_message(first_step.get("question", ""), {})
-                return "Olá! Seja bem-vindo ao m.lima. Para início, qual é o seu nome ao todo?"
-
-            logger.info(f"✅ DEBUG: Found current step: {current_step.get('field', 'unknown_field')}")
-
-            # TRATAR SAUDAÇÕES APENAS NO PRIMEIRO STEP
-            if current_step_id == 1:
-                message_lower = (message or "").lower().strip()
-                if message_lower in ['oi', 'olá', 'hello', 'hi', 'ola', 'hey', 'e ai', 'eai']:
-                    logger.info("👋 DEBUG: Greeting detected in step 1, re-sending question")
-                    return self._interpolate_message(current_step["question"], lead_data)
-
-            # VERIFICAR SE HÁ MENSAGEM VÁLIDA
-            if not message or not message.strip():
-                logger.info("📝 DEBUG: Empty message, re-sending current question")
-                return self._interpolate_message(current_step.get("question", ""), lead_data)
-
-            # PROCESSAR RESPOSTA DO USUÁRIO
-            logger.info(f"⚙️ DEBUG: Processing user answer: '{message}'")
-            
-            validation_attempts[current_step_id] += 1
-            session_data["validation_attempts"] = validation_attempts
-            
-            max_attempts = 3
-            is_flexible = validation_attempts[current_step_id] > max_attempts
-
-            logger.info(f"📊 DEBUG: Attempt {validation_attempts[current_step_id]}/{max_attempts}, Flexible mode: {is_flexible}")
-
-            # VALIDAÇÃO
-            normalized_answer = self._validate_and_normalize_answer_schema(message, current_step)
-            should_advance = self._should_advance_step_schema(normalized_answer, current_step, is_flexible)
-
-            logger.info(f"✅ DEBUG: Normalized answer: '{normalized_answer}'")
-            logger.info(f"✅ DEBUG: Should advance: {should_advance}")
-
-            if not should_advance:
-                logger.info(f"❌ DEBUG: Validation failed for step {current_step_id}")
-                
-                # Construir mensagem de erro específica
-                if validation_attempts[current_step_id] >= max_attempts:
-                    if current_step_id == 1:
-                        validation_msg = "Preciso do seu nome completo para continuar. Por favor, digite seu nome e sobrenome (exemplo: João Silva):"
-                    elif current_step_id == 2:
-                        validation_msg = "Preciso de seu telefone e/ou e-mail. Por favor, digite ao menos um contato válido:"
-                    elif current_step_id == 3:
-                        validation_msg = "Por favor, escolha apenas: 'Penal' ou 'Saúde'"
-                    elif current_step_id == 4:
-                        validation_msg = "Preciso de mais detalhes sobre sua situação jurídica. Conte-me pelo menos uma frase sobre seu caso:"
-                    else:
-                        validation_msg = "Por favor, confirme digitando 'sim' ou 'não':"
-                else:
-                    validation_msg = current_step.get("error_message", "Por favor, forneça uma resposta válida.")
-
-                await save_user_session(session_id, session_data)
-                question = self._interpolate_message(current_step["question"], lead_data)
-                response = f"{validation_msg}\n\n{question}"
-                logger.info(f"📤 DEBUG: Sending validation error: '{response[:100]}...'")
-                return response
-
-            # SUCESSO - SALVAR RESPOSTA E AVANÇAR
-            logger.info(f"✅ DEBUG: Step {current_step_id} completed successfully")
-            
-            # Reset contador para step atual
-            validation_attempts[current_step_id] = 0
-            
-            # Salvar resposta
-            field_name = current_step.get("field", f"step_{current_step_id}")
-            lead_data[field_name] = normalized_answer
-            session_data["lead_data"] = lead_data
-
-            logger.info(f"💾 DEBUG: Saved answer for field '{field_name}': '{normalized_answer}'")
-
-            # EXTRAIR INFORMAÇÕES DE CONTATO SE STEP 2
-            if current_step.get("field") == "contact_info":
-                phone, email = self._extract_contact_info(normalized_answer)
-                if phone:
-                    session_data["lead_data"]["phone"] = phone
-                    logger.info(f"📱 DEBUG: Extracted phone: {phone}")
-                if email:
-                    session_data["lead_data"]["email"] = email
-                    logger.info(f"📧 DEBUG: Extracted email: {email}")
-
-            # AVANÇAR PARA PRÓXIMO STEP
-            next_step_id = current_step_id + 1
-            next_step = next((s for s in steps if s["id"] == next_step_id), None)
-            
-            if next_step:
-                logger.info(f"➡️ DEBUG: Advancing from step {current_step_id} to {next_step_id}")
-                session_data["fallback_step"] = next_step_id
-                validation_attempts[next_step_id] = 0
-                session_data["validation_attempts"] = validation_attempts
-                await save_user_session(session_id, session_data)
-                
-                response = self._interpolate_message(next_step.get("question", ""), lead_data)
-                logger.info(f"📤 DEBUG: Sending next step question: '{response[:100]}...'")
-                return response
-            else:
-                # FINALIZAR FLUXO
-                logger.info("🏁 DEBUG: Flow completed, starting finalization")
-                session_data["fallback_completed"] = True
-                session_data["lead_qualified"] = True
-                await save_user_session(session_id, session_data)
-                
-                return await self._handle_lead_finalization(session_id, session_data)
-
-        except Exception as e:
-            logger.error(f"❌ DEBUG: Exception in fallback response: {str(e)}")
-            import traceback
-            logger.error(f"❌ DEBUG: Traceback: {traceback.format_exc()}")
-            return "Olá! Seja bem-vindo ao m.lima. Me conte como é seu nome inteiro?"
-
-    def _interpolate_message(self, message: str, lead_data: Dict[str, Any]) -> str:
-        try:
-            if not message:
-                return "Como posso ajudá-lo?"
-            interpolation_data = {
-                "user_name": lead_data.get("identification", ""),
-                "area": lead_data.get("area_qualification", ""),
-                "contact_info": lead_data.get("contact_info", ""),
-                "case_details": lead_data.get("case_details", ""),
-                "phone": lead_data.get("phone", ""),
-                "case_summary": (lead_data.get("case_details", "")[:100] + "...") if lead_data.get("case_details", "") and len(lead_data.get("case_details", "")) > 100 else lead_data.get("case_details", "")
-            }
-            for key, value in interpolation_data.items():
-                if value and f"{{{key}}}" in message:
-                    message = message.replace(f"{{{key}}}", value)
-            return message
-        except Exception as e:
-            logger.error(f"❌ Error interpolating message: {str(e)}")
-            return message
+        return True
 
     def _extract_contact_info(self, contact_text: str) -> tuple:
         phone_match = re.search(r'(\d{10,11})', contact_text or "")
@@ -482,406 +558,249 @@ class IntelligentHybridOrchestrator:
         email = email_match.group(1) if email_match else ""
         return phone, email
 
-    def _validate_and_normalize_answer_schema(self, answer: str, step_config: Dict[str, Any]) -> str:
-        """Normalize and lightly sanitize input according to step schema."""
-        answer = (answer or "").strip()
-        step_id = step_config.get("id", 0)
-        validation = step_config.get("validation", {}) or {}
-
-        logger.info(f"🔍 DEBUG: Validating answer for step {step_id}: '{answer}'")
-
-        # normalization map (explicit keys -> normalized)
-        normalize_map = validation.get("normalize_map", {}) or {}
-        if normalize_map:
-            answer_lower = answer.lower()
-            for keyword, normalized in normalize_map.items():
-                if keyword.lower() in answer_lower:
-                    logger.info(f"✅ DEBUG: Normalized '{answer}' to '{normalized}' via map")
-                    return normalized
-
-        field_type = validation.get("type", "") or ""
-
-        # name
-        if field_type == "name" or step_id == 1:
-            if self._is_invalid_response(answer, "name"):
-                return answer
-            words = [w for w in answer.split() if w.strip()]
-            if len(words) >= 2:
-                result = " ".join(word.capitalize() for word in words)
-                logger.info(f"✅ DEBUG: Normalized name: '{result}'")
-                return result
-            result = answer.capitalize()
-            logger.info(f"✅ DEBUG: Capitalized name: '{result}'")
-            return result
-
-        # contact combined
-        if field_type == "contact_combined" or step_id == 2:
-            logger.info(f"✅ DEBUG: Contact info kept as-is: '{answer}'")
-            return answer
-
-        # area
-        if field_type == "area" or step_id == 3:
-            answer_lower = answer.lower()
-            area_mapping = {
-                ("penal", "criminal", "crime", "direito penal"): "Direito Penal",
-                ("saude", "saúde", "liminar", "saude liminar", "saúde liminar", "medica", "médica", "health", "injunction"): "Saúde/Liminares"
-            }
-            for keywords, normalized in area_mapping.items():
-                if any(k in answer_lower for k in keywords):
-                    logger.info(f"✅ DEBUG: Mapped area '{answer}' to '{normalized}'")
-                    return normalized
-            result = answer.title()
-            logger.info(f"✅ DEBUG: Titlecased area: '{result}'")
-            return result
-
-        # case description
-        if field_type == "case_description" or step_id == 4:
-            logger.info(f"✅ DEBUG: Case details kept as-is: '{answer}'")
-            return answer
-
-        # confirmation
-        if field_type == "confirmation" or step_id == 5:
-            answer_lower = answer.lower()
-            if any(conf in answer_lower for conf in ['sim', 'ok', 'pode', 'claro', 'vamos', 'confirmo', 'confirmado', 's', 'yes']):
-                logger.info("✅ DEBUG: Confirmation detected")
-                return "Confirmado"
-            logger.info(f"✅ DEBUG: Confirmation kept as-is: '{answer}'")
-            return answer
-
-        # phone explicit
-        if field_type == "phone":
-            result = ''.join(filter(str.isdigit, answer))
-            logger.info(f"✅ DEBUG: Phone normalized: '{result}'")
-            return result
-
-        logger.info(f"✅ DEBUG: Answer kept as-is: '{answer}'")
-        return answer
-
-    def _should_advance_step_schema(self, answer: str, step_config: Dict[str, Any], is_flexible: bool = False) -> bool:
-        """VALIDAÇÃO COM LOGS DETALHADOS PARA DEBUG"""
-        answer = (answer or "").strip()
-        validation = step_config.get("validation", {}) or {}
-        min_length = validation.get("min_length", 1)
-        min_words = validation.get("min_words", 1)
-        required = validation.get("required", True)
-        step_id = step_config.get("id", 0)
-
-        logger.info(f"🔍 DEBUG: ===== VALIDATION FOR STEP {step_id} =====")
-        logger.info(f"🔍 DEBUG: Answer: '{answer}' (length: {len(answer)})")
-        logger.info(f"🔍 DEBUG: Required: {required}, Min length: {min_length}, Min words: {min_words}")
-        logger.info(f"🔍 DEBUG: Is flexible: {is_flexible}")
-
-        if required and not answer:
-            logger.info(f"❌ DEBUG: Step {step_id}: Required field is empty")
-            return False
-
-        # VALIDAÇÃO ESPECÍFICA POR STEP COM LOGS DETALHADOS
-        if step_id == 1:  # Nome
-            logger.info(f"🔍 DEBUG: Step 1 (Name) validation")
+    async def _process_conversation_flow(self, session_data: Dict[str, Any], message: str) -> str:
+        """Processar fluxo conversacional humanizado com notificação inteligente"""
+        try:
+            session_id = session_data["session_id"]
+            current_step = session_data.get("current_step", "step1_name")
+            lead_data = session_data.get("lead_data", {})
+            is_first_interaction = session_data.get("first_interaction", False)
+            platform = session_data.get("platform", "web")
             
-            if self._is_invalid_response(answer, "name"):
-                logger.info(f"❌ DEBUG: Step 1: Invalid response detected: '{answer}'")
-                return False
+            logger.info(f"Processing conversation - Step: {current_step}, Message: '{message[:50]}...', Platform: {platform}")
+            
+            flow_steps = self._get_flow_steps()
+
+            # Se é primeira interação, mostra saudação + primeira pergunta
+            if is_first_interaction:
+                session_data["first_interaction"] = False
+                await save_user_session(session_id, session_data)
+                greeting = self._get_personalized_greeting()
+                return greeting
+
+            # Fluxo já completado
+            if current_step == "completed":
+                user_name = lead_data.get("identification", "").split()[0] if lead_data.get("identification") else ""
+                return f"Obrigado, {user_name}! Nossa equipe já foi notificada e entrará em contato em breve. 😊"
+
+            # Processar steps do fluxo
+            if current_step in flow_steps:
+                step_config = flow_steps[current_step]
                 
-            if answer.isdigit():
-                logger.info(f"❌ DEBUG: Step 1: Only numbers not accepted: '{answer}'")
-                return False
+                # Validar resposta
+                if not self._validate_answer(message, current_step):
+                    user_name = lead_data.get("identification", "").split()[0] if lead_data.get("identification") else ""
+                    retry_messages = {
+                        "step1_name": "Por favor, me diga seu nome completo para continuarmos. 😊",
+                        "step2_contact": f"Preciso de suas informações de contato, {user_name}. Pode me passar seu WhatsApp e e-mail?",
+                        "step3_area": f"{user_name}, qual área do direito você precisa? Penal ou Saúde?",
+                        "step4_details": f"Me conte mais detalhes sobre sua situação, {user_name}. Quanto mais informações, melhor poderemos te ajudar!"
+                    }
+                    return retry_messages.get(current_step, "Por favor, me dê mais detalhes para que eu possa te ajudar melhor.")
                 
-            words = [w for w in answer.split() if w.strip() and len(w) >= 2]
-            logger.info(f"🔍 DEBUG: Step 1: Valid words found: {words} (count: {len(words)})")
-            
-            if is_flexible:
-                result = len(words) >= 1 and len(answer) >= 2
-                logger.info(f"✅ DEBUG: Step 1 (flexible): {result} - Words: {len(words)}, Length: {len(answer)}")
-                return result
-            else:
-                result = len(words) >= 1 and len(answer) >= 2
-                logger.info(f"✅ DEBUG: Step 1 (strict): {result} - Valid words: {words}")
-                return result
+                # Salvar resposta
+                field_name = step_config["field"]
+                lead_data[field_name] = message.strip()
+                
+                # Extrair informações de contato se for step2
+                if current_step == "step2_contact":
+                    phone, email = self._extract_contact_info(message)
+                    if phone:
+                        lead_data["phone"] = phone
+                    if email:
+                        lead_data["email"] = email
+                
+                session_data["lead_data"] = lead_data
+                
+                # 🎯 VERIFICAR SE DEVE NOTIFICAR ADVOGADOS (antes de avançar)
+                notification_result = await self.notify_lawyers_if_qualified(session_id, session_data, platform)
+                if notification_result.get("notified") and notification_result.get("success"):
+                    logger.info(f"✅ Advogados notificados durante fluxo - Step: {current_step}, Session: {session_id}")
+                
+                # Avançar para próximo step
+                next_step = step_config["next_step"]
+                
+                if next_step == "completed":
+                    # Finalizar fluxo
+                    session_data["current_step"] = "completed"
+                    session_data["flow_completed"] = True
+                    await save_user_session(session_id, session_data)
+                    return await self._handle_lead_finalization(session_id, session_data)
+                else:
+                    # Próxima pergunta
+                    session_data["current_step"] = next_step
+                    await save_user_session(session_id, session_data)
+                    
+                    next_step_config = flow_steps[next_step]
+                    return self._interpolate_message(next_step_config["question"], lead_data)
 
-        if step_id == 2:  # Contato
-            logger.info(f"🔍 DEBUG: Step 2 (Contact) validation")
-            
-            answer_lower = answer.lower()
-            has_phone = bool(re.search(r'\d{10,11}', answer))
-            has_email = bool(re.search(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', answer))
-            has_contact_keywords = any(word in answer_lower for word in ['telefone', 'celular', 'whatsapp', 'email', 'gmail', 'hotmail'])
-            
-            logger.info(f"🔍 DEBUG: Step 2: Phone found: {has_phone}, Email found: {has_email}")
-            logger.info(f"🔍 DEBUG: Step 2: Contact keywords found: {has_contact_keywords}")
-            
-            if is_flexible:
-                result = has_phone or has_email or has_contact_keywords or len(answer) >= 8
-                logger.info(f"✅ DEBUG: Step 2 (flexible): {result} - Phone: {has_phone}, Email: {has_email}, Keywords: {has_contact_keywords}")
-                return result
-            else:
-                result = (has_phone or has_email) and len(answer) >= min_length
-                logger.info(f"✅ DEBUG: Step 2 (strict): {result} - Phone: {has_phone}, Email: {has_email}")
-                return result
+            # Estado inválido - reiniciar
+            logger.warning(f"Invalid state: {current_step}, resetting")
+            session_data["current_step"] = "step1_name"
+            session_data["first_interaction"] = True
+            await save_user_session(session_id, session_data)
+            return self._get_personalized_greeting()
 
-        if step_id == 3:  # Área
-            logger.info(f"🔍 DEBUG: Step 3 (Area) validation")
-            
-            answer_lower = answer.lower()
-            valid_areas = ["penal", "criminal", "crime", "saude", "saúde", "liminar", "medica", "médica"]
-            has_valid_area = any(area in answer_lower for area in valid_areas)
-            
-            logger.info(f"🔍 DEBUG: Step 3: Answer lower: '{answer_lower}'")
-            logger.info(f"🔍 DEBUG: Step 3: Valid area detected: {has_valid_area}")
-            
-            if is_flexible:
-                result = has_valid_area or len(answer) >= 4
-                logger.info(f"✅ DEBUG: Step 3 (flexible): {result} - Valid area: {has_valid_area}")
-                return result
-            else:
-                result = has_valid_area
-                logger.info(f"✅ DEBUG: Step 3 (strict): {result} - Answer: '{answer_lower}', Valid: {has_valid_area}")
-                return result
+        except Exception as e:
+            logger.error(f"Exception in conversation flow: {str(e)}")
+            return self._get_personalized_greeting()
 
-        if step_id == 4:  # Detalhes do caso
-            logger.info(f"🔍 DEBUG: Step 4 (Case details) validation")
-            
-            words = [w for w in answer.split() if w.strip()]
-            logger.info(f"🔍 DEBUG: Step 4: Words count: {len(words)}, Length: {len(answer)}")
-            
-            if is_flexible:
-                result = len(answer) >= 15 and len(words) >= 4
-                logger.info(f"✅ DEBUG: Step 4 (flexible): {result} - Length: {len(answer)}, Words: {len(words)}")
-                return result
-            else:
-                result = len(answer) >= min_length and len(words) >= min_words
-                logger.info(f"✅ DEBUG: Step 4 (strict): {result} - Length: {len(answer)}/{min_length}, Words: {len(words)}/{min_words}")
-                return result
-
-        if step_id == 5:  # Confirmação
-            logger.info(f"🔍 DEBUG: Step 5 (Confirmation) validation")
-            
-            answer_lower = answer.lower()
-            confirmations = ['sim', 'ok', 'pode', 'claro', 'vamos', 'confirmo', 'certo', 'yes', 's']
-            has_confirmation = any(conf in answer_lower for conf in confirmations)
-            
-            logger.info(f"🔍 DEBUG: Step 5: Answer lower: '{answer_lower}'")
-            logger.info(f"🔍 DEBUG: Step 5: Confirmation detected: {has_confirmation}")
-            
-            result = has_confirmation or len(answer) >= 2
-            logger.info(f"✅ DEBUG: Step 5: {result} - Answer: '{answer_lower}'")
-            return result
-
-        # Default validation
-        logger.info(f"🔍 DEBUG: Using default validation for step {step_id}")
-        result = len(answer) >= (min_length if not is_flexible else 2)
-        logger.info(f"✅ DEBUG: Step {step_id} (default): {result} - Length: {len(answer)}")
-        return result
+    def _interpolate_message(self, message: str, lead_data: Dict[str, Any]) -> str:
+        """Interpolar dados do usuário na mensagem"""
+        try:
+            if not message:
+                return "Como posso ajudá-lo?"
+                
+            user_name = lead_data.get("identification", "")
+            if user_name and "{user_name}" in message:
+                # Usar apenas o primeiro nome
+                first_name = user_name.split()[0]
+                message = message.replace("{user_name}", first_name)
+                
+            area = lead_data.get("area_qualification", "")
+            if area and "{area}" in message:
+                message = message.replace("{area}", area)
+                
+            return message
+        except Exception as e:
+            logger.error(f"Error interpolating message: {str(e)}")
+            return message
 
     async def _handle_lead_finalization(self, session_id: str, session_data: Dict[str, Any]) -> str:
-        """FINALIZAÇÃO COM LOGS DETALHADOS"""
+        """🎯 FINALIZAÇÃO INTELIGENTE COM MENSAGEM ESTRATÉGICA"""
         try:
-            logger.info(f"🏁 DEBUG: ===== LEAD FINALIZATION START =====")
-            logger.info(f"🏁 DEBUG: Session ID: {session_id}")
+            logger.info(f"Lead finalization for session: {session_id}")
             
-            lead_data = session_data.get("lead_data", {}) or {}
-            logger.info(f"🏁 DEBUG: Lead data: {lead_data}")
-
+            lead_data = session_data.get("lead_data", {})
+            platform = session_data.get("platform", "web")
+            user_name = lead_data.get("identification", "Cliente")
+            first_name = user_name.split()[0] if user_name else "Cliente"
+            
             # Extrair telefone
             phone_clean = lead_data.get("phone", "")
             if not phone_clean:
                 contact_info = lead_data.get("contact_info", "")
                 phone_match = re.search(r'(\d{10,11})', contact_info or "")
                 phone_clean = phone_match.group(1) if phone_match else ""
-                logger.info(f"📱 DEBUG: Extracted phone from contact_info: {phone_clean}")
-            else:
-                logger.info(f"📱 DEBUG: Phone already available: {phone_clean}")
                 
-            # VERIFICAR TELEFONE
             if not phone_clean or len(phone_clean) < 10:
-                logger.warning(f"❌ DEBUG: Invalid phone number: '{phone_clean}'")
-                return "Para finalizar, preciso do seu número de WhatsApp com DDD (exemplo: 11999999999):"
+                return f"Para finalizar, {first_name}, preciso do seu WhatsApp com DDD (ex: 11999999999):"
 
             # Formatar telefone
             phone_formatted = self._format_brazilian_phone(phone_clean)
-            whatsapp_number = f"{phone_formatted}@s.whatsapp.net"
             
-            logger.info(f"📱 DEBUG: Phone formatted: {phone_formatted}")
-            logger.info(f"📱 DEBUG: WhatsApp number: {whatsapp_number}")
-
             # Atualizar dados da sessão
             session_data.update({
                 "phone_number": phone_clean,
                 "phone_formatted": phone_formatted,
                 "phone_submitted": True,
                 "lead_qualified": True,
-                "qualification_completed_at": ensure_utc(datetime.now(timezone.utc)),
                 "last_updated": ensure_utc(datetime.now(timezone.utc))
             })
             
-            session_data["lead_data"]["phone"] = phone_clean
             await save_user_session(session_id, session_data)
-            logger.info("💾 DEBUG: Session data updated")
 
-            # Preparar dados para salvamento
-            answers = []
-            field_mapping = {
-                "identification": 1,
-                "contact_info": 2, 
-                "area_qualification": 3,
-                "case_details": 4,
-                "lead_warming": 5
-            }
+            # 🚀 NOTIFICAR ADVOGADOS SE AINDA NÃO FORAM NOTIFICADOS
+            notification_result = await self.notify_lawyers_if_qualified(session_id, session_data, platform)
             
-            for field, step_id in field_mapping.items():
-                answer = lead_data.get(field, "")
-                if answer:
-                    answers.append({"id": step_id, "answer": answer})
-                    logger.info(f"📝 DEBUG: Added answer for step {step_id}: '{answer[:50]}...'")
-            
-            if phone_clean:
-                answers.append({"id": 99, "field": "phone_extracted", "answer": phone_clean})
-                logger.info(f"📱 DEBUG: Added extracted phone: {phone_clean}")
-
             # Salvar lead data
             try:
-                lead_id = await save_lead_data({"answers": answers})
-                logger.info(f"💾 DEBUG: Lead saved with ID: {lead_id}")
+                answers = []
+                field_mapping = {
+                    "identification": {"id": 1, "answer": lead_data.get("identification", "")},
+                    "contact_info": {"id": 2, "answer": lead_data.get("contact_info", "")},
+                    "area_qualification": {"id": 3, "answer": lead_data.get("area_qualification", "")},
+                    "case_details": {"id": 4, "answer": lead_data.get("case_details", "")},
+                    "confirmation": {"id": 5, "answer": lead_data.get("confirmation", "")}
+                }
                 
-                # Preparar dados para notificação
-                user_name = lead_data.get("identification", "Cliente")
-                area = lead_data.get("area_qualification", "não informada")
-                case_details = lead_data.get("case_details", "não detalhada")
-                contact_info = lead_data.get("contact_info", "não informado")
-                email = lead_data.get("email", "não informado")
+                for field, data in field_mapping.items():
+                    if data["answer"]:
+                        answers.append(data)
+                
+                if phone_clean:
+                    answers.append({"id": 99, "field": "phone_extracted", "answer": phone_clean})
 
-                logger.info(f"👤 DEBUG: User name: {user_name}")
-                logger.info(f"⚖️ DEBUG: Area: {area}")
-                logger.info(f"📝 DEBUG: Case details: {case_details[:100]}...")
-
-                # Notificar advogados
-                try:
-                    logger.info("📬 DEBUG: Sending lawyer notifications")
-                    notification_result = await lawyer_notification_service.notify_lawyers_of_new_lead(
-                        lead_name=user_name,
-                        lead_phone=phone_clean,
-                        category=area,
-                        additional_info={
-                            "case_details": case_details,
-                            "contact_info": contact_info,
-                            "email": email,
-                            "urgency": "high",
-                            "lead_temperature": "hot",
-                            "flow_type": "fluxo_qualificacao_completo_debug",
-                            "platform": session_data.get("platform", "web")
-                        }
-                    )
-                    
-                    if notification_result.get("success"):
-                        notifications_sent = notification_result.get("notifications_sent", 0)
-                        total_lawyers = notification_result.get("total_lawyers", 0)
-                        logger.info(f"✅ DEBUG: Lawyers notified: {notifications_sent}/{total_lawyers}")
-                    else:
-                        logger.error(f"❌ DEBUG: Failed to notify lawyers: {notification_result.get('error', 'Unknown error')}")
-                        
-                except Exception as notification_error:
-                    logger.error(f"❌ DEBUG: Error notifying lawyers: {str(notification_error)}")
+                lead_id = await save_lead_data({"answers": answers})
+                logger.info(f"Lead saved with ID: {lead_id}")
                     
             except Exception as save_error:
-                logger.error(f"❌ DEBUG: Error saving lead: {str(save_error)}")
+                logger.error(f"Error saving lead: {str(save_error)}")
 
-            # Preparar resumo do caso
-            case_summary = case_details[:100]
-            if len(case_details) > 100:
-                case_summary += "..."
-
-            # Mensagem final do WhatsApp
-            final_whatsapp_message = f"""Olá {user_name}! 👋
-
-Recebemos sua solicitação de atendimento jurídico através do nosso sistema e nossa equipe especializada em {area} já foi notificada!
-
-Um advogado experiente do m.lima entrará em contato diretamente com você no WhatsApp em breve. 🤝
-
-📄 **Resumo do seu caso:**
-
-👤 Nome: {user_name}
-⚖️ Área: {area}
-📝 Situação: {case_summary}
-
-✅ Você está em excelentes mãos! Nossa equipe tem vasta experiência em casos similares.
-
-Aguarde nosso contato! 💼"""
-
-            # Enviar WhatsApp
+            # 📱 ENVIAR WHATSAPP ESTRATÉGICO
+            area = lead_data.get("area_qualification", "direito")
+            strategic_message = self._get_strategic_whatsapp_message(user_name, area, phone_formatted)
+            
+            whatsapp_number = f"{phone_formatted}@s.whatsapp.net"
             whatsapp_success = False
+            
             try:
-                logger.info(f"📤 DEBUG: Sending WhatsApp to: {whatsapp_number}")
-                await baileys_service.send_whatsapp_message(whatsapp_number, final_whatsapp_message)
-                logger.info(f"📤 DEBUG: WhatsApp sent successfully to {phone_formatted}")
+                await baileys_service.send_whatsapp_message(whatsapp_number, strategic_message)
+                logger.info(f"📱 WhatsApp estratégico enviado com sucesso para {phone_formatted}")
                 whatsapp_success = True
-                
             except Exception as whatsapp_error:
-                logger.error(f"❌ DEBUG: Error sending WhatsApp: {str(whatsapp_error)}")
-                whatsapp_success = False
+                logger.error(f"❌ Erro ao enviar WhatsApp estratégico: {str(whatsapp_error)}")
 
-            # Mensagem final para interface
-            final_message = f"""Perfeito, {user_name}! ✅
+            # 🎯 MENSAGEM FINAL PERSONALIZADA
+            notification_status = ""
+            if notification_result.get("notified") and notification_result.get("success"):
+                notification_status = " ⚡ Nossa equipe foi imediatamente notificada!"
+            
+            final_message = f"""Perfeito, {first_name}! ✅
 
-Suas informações foram registradas com sucesso e nossa equipe especializada em {area} foi notificada imediatamente.
+Todas suas informações foram registradas com sucesso{notification_status}
 
-Um advogado experiente do m.lima entrará em contato em breve para dar continuidade ao seu caso.
+Um advogado experiente do m.lima entrará em contato com você em breve para dar prosseguimento ao seu caso com toda atenção necessária.
 
-{'📱 Confirmação enviada no seu WhatsApp!' if whatsapp_success else '⚠️ Suas informações foram salvas, mas houve um problema ao enviar a confirmação no WhatsApp.'}
+{'📱 Mensagem de confirmação enviada no seu WhatsApp!' if whatsapp_success else '📝 Suas informações foram salvas com segurança.'}
 
-Obrigado por escolher nossos serviços jurídicos! 🤝"""
+Você fez a escolha certa ao confiar no escritório m.lima para cuidar do seu caso! 🤝
 
-            logger.info(f"✅ DEBUG: Lead finalization completed successfully")
+Em alguns minutos, um especialista entrará em contato."""
+
             return final_message
             
         except Exception as e:
-            logger.error(f"❌ DEBUG: Error in lead finalization: {str(e)}")
-            import traceback
-            logger.error(f"❌ DEBUG: Finalization traceback: {traceback.format_exc()}")
+            logger.error(f"Error in lead finalization: {str(e)}")
             user_name = session_data.get("lead_data", {}).get("identification", "")
-            return f"Obrigado pelas informações, {user_name}! Nossa equipe entrará em contato em breve."
+            first_name = user_name.split()[0] if user_name else ""
+            return f"Obrigado pelas informações, {first_name}! Nossa equipe entrará em contato em breve. 😊"
 
     async def _handle_phone_collection(self, phone_message: str, session_id: str, session_data: Dict[str, Any]) -> str:
-        """Coleta de telefone para casos onde não foi extraído automaticamente."""
+        """Coleta de telefone com toque humano"""
         try:
-            logger.info(f"📱 DEBUG: Phone collection for session {session_id}")
             phone_clean = ''.join(filter(str.isdigit, phone_message))
-            logger.info(f"📱 DEBUG: Cleaned phone: {phone_clean}")
+            user_name = session_data.get("lead_data", {}).get("identification", "")
+            first_name = user_name.split()[0] if user_name else ""
             
             if len(phone_clean) < 10 or len(phone_clean) > 13:
-                logger.warning(f"❌ DEBUG: Invalid phone length: {len(phone_clean)}")
-                return "Número inválido. Por favor, digite no formato com DDD (exemplo: 11999999999):"
+                return f"Ops, {first_name}! Número inválido. Digite seu WhatsApp com DDD (ex: 11999999999):"
 
             session_data["lead_data"]["phone"] = phone_clean
             return await self._handle_lead_finalization(session_id, session_data)
             
         except Exception as e:
-            logger.error(f"❌ DEBUG: Error in phone collection: {str(e)}")
+            logger.error(f"Error in phone collection: {str(e)}")
             user_name = session_data.get("lead_data", {}).get("identification", "")
-            return f"Obrigado pelas informações, {user_name}! Nossa equipe entrará em contato em breve."
+            first_name = user_name.split()[0] if user_name else ""
+            return f"Obrigado, {first_name}! Nossa equipe entrará em contato em breve. 😊"
 
     async def process_message(self, message: str, session_id: str, phone_number: Optional[str] = None, platform: str = "web") -> Dict[str, Any]:
-        """PROCESSAMENTO PRINCIPAL COM DEBUG COMPLETO"""
+        """🎯 PROCESSAMENTO PRINCIPAL COM NOTIFICAÇÃO INTELIGENTE"""
         try:
-            logger.info(f"🎯 DEBUG: ===== PROCESS MESSAGE START =====")
-            logger.info(f"🎯 DEBUG: Session: {session_id}, Platform: {platform}")
-            logger.info(f"🎯 DEBUG: Message: '{message}'")
-            logger.info(f"🎯 DEBUG: Phone number: {phone_number}")
+            logger.info(f"Processing message - Session: {session_id}, Platform: {platform}")
+            logger.info(f"Message: '{message}'")
 
             session_data = await self._get_or_create_session(session_id, platform, phone_number)
             
-            current_step = session_data.get("fallback_step", "não iniciado")
-            qualified = session_data.get("lead_qualified", False)
-            phone_submitted = session_data.get("phone_submitted", False)
-            flow_initialized = session_data.get("flow_initialized", False)
-            
-            logger.info(f"📊 DEBUG: Session state - Step: {current_step}, Qualified: {qualified}, Phone: {phone_submitted}, Flow init: {flow_initialized}")
-
-            # Tratar coleta de telefone para leads qualificados sem telefone
-            if (qualified and not phone_submitted and self._is_phone_number(message)):
-                logger.info("📱 DEBUG: Processing phone collection for qualified lead")
+            # Tratar coleta de telefone para leads qualificados
+            if (session_data.get("lead_qualified", False) and 
+                not session_data.get("phone_submitted", False) and 
+                self._is_phone_number(message)):
+                
                 phone_response = await self._handle_phone_collection(message, session_id, session_data)
                 return {
-                    "response_type": "phone_collected_debug",
+                    "response_type": "phone_collected",
                     "platform": platform,
                     "session_id": session_id,
                     "response": phone_response,
@@ -889,66 +808,122 @@ Obrigado por escolher nossos serviços jurídicos! 🤝"""
                     "message_count": session_data.get("message_count", 0) + 1
                 }
 
-            # USAR FLUXO ESTRUTURADO PARA TODAS AS PLATAFORMAS
-            logger.info(f"🌐 DEBUG: Platform {platform} - Using structured flow with debug")
+            # Processar fluxo principal
+            response = await self._process_conversation_flow(session_data, message)
             
-            fallback_response = await self._get_fallback_response(session_data, message)
-            logger.info(f"📤 DEBUG: Fallback response: '{fallback_response[:100]}...'")
-            
-            # Atualizar sessão
-            session_data["last_message"] = message
-            session_data["last_response"] = fallback_response
-            session_data["last_updated"] = ensure_utc(datetime.now(timezone.utc))
+            # Atualizar contadores
             session_data["message_count"] = session_data.get("message_count", 0) + 1
+            session_data["last_updated"] = ensure_utc(datetime.now(timezone.utc))
             await save_user_session(session_id, session_data)
-            logger.info("💾 DEBUG: Session updated and saved")
             
             result = {
-                "response_type": f"{platform}_fluxo_debug",
+                "response_type": f"{platform}_flow",
                 "platform": platform,
                 "session_id": session_id,
-                "response": fallback_response,
+                "response": response,
                 "ai_mode": False,
-                "fallback_step": session_data.get("fallback_step"),
-                "lead_qualified": session_data.get("lead_qualified", False),
-                "fallback_completed": session_data.get("fallback_completed", False),
+                "current_step": session_data.get("current_step"),
+                "flow_completed": session_data.get("flow_completed", False),
+                "lawyers_notified": session_data.get("lawyers_notified", False),
                 "lead_data": session_data.get("lead_data", {}),
-                "validation_attempts": session_data.get("validation_attempts", {}),
-                "available_areas": ["Direito Penal", "Saúde/Liminares"],
                 "message_count": session_data.get("message_count", 1),
-                "session_started": session_data.get("session_started", False),
-                "flow_initialized": session_data.get("flow_initialized", False)
+                "qualification_score": self._calculate_qualification_score(
+                    session_data.get("lead_data", {}), platform
+                )
             }
             
-            logger.info(f"✅ DEBUG: Process message completed - Step: {result['fallback_step']}, Qualified: {result['lead_qualified']}")
             return result
 
         except Exception as e:
-            logger.error(f"❌ DEBUG: Exception in process_message: {str(e)}")
-            import traceback
-            logger.error(f"❌ DEBUG: Process message traceback: {traceback.format_exc()}")
+            logger.error(f"Exception in process_message: {str(e)}")
             return {
-                "response_type": "orchestration_error_debug",
+                "response_type": "orchestration_error",
                 "platform": platform,
                 "session_id": session_id,
-                "response": "Olá! Seja bem-vindo ao m.lima. Vamos iniciar, qual é o seu nome completo?",
+                "response": self._get_personalized_greeting(),
+                "error": str(e)
+            }
+
+    async def handle_whatsapp_authorization(self, auth_data: Dict[str, Any]):
+        """
+        🎯 HANDLER PARA AUTORIZAÇÃO WHATSAPP
+        
+        Chamado quando um número é autorizado para usar WhatsApp
+        Prepara o sistema para receber mensagens desse usuário
+        """
+        try:
+            session_id = auth_data.get("session_id", "")
+            phone_number = auth_data.get("phone_number", "")
+            source = auth_data.get("source", "unknown")
+            user_data = auth_data.get("user_data", {})
+            
+            logger.info(f"🎯 Processando autorização WhatsApp - Session: {session_id}, Phone: {phone_number}, Source: {source}")
+            
+            # Se tem dados do usuário (ex: do chat da landing), criar sessão pré-populada
+            if user_data and source == "landing_chat":
+                session_data = {
+                    "session_id": session_id,
+                    "platform": "whatsapp",
+                    "phone_number": phone_number,
+                    "created_at": ensure_utc(datetime.now(timezone.utc)),
+                    "current_step": "completed",  # Chat já foi completado na landing
+                    "lead_data": {
+                        "identification": user_data.get("name", ""),
+                        "contact_info": f"{phone_number} {user_data.get('email', '')}".strip(),
+                        "area_qualification": "não especificada",
+                        "case_details": user_data.get("problem", "Detalhes do chat da landing"),
+                        "phone": phone_number,
+                        "email": user_data.get("email", "")
+                    },
+                    "message_count": 1,
+                    "flow_completed": True,
+                    "phone_submitted": True,
+                    "lead_qualified": True,
+                    "lawyers_notified": False,  # Ainda não notificou - vai notificar agora
+                    "last_updated": ensure_utc(datetime.now(timezone.utc)),
+                    "first_interaction": False,
+                    "authorization_source": source
+                }
+                
+                await save_user_session(session_id, session_data)
+                
+                # Notificar advogados imediatamente para leads da landing
+                notification_result = await self.notify_lawyers_if_qualified(session_id, session_data, "whatsapp")
+                
+                logger.info(f"✅ Sessão pré-populada criada para lead da landing - Session: {session_id}")
+                
+            else:
+                # Autorização de botão - criar sessão vazia para futuras mensagens
+                logger.info(f"📝 Autorização de botão registrada - Session: {session_id} - Aguardando primeira mensagem")
+            
+            return {
+                "status": "authorization_processed",
+                "session_id": session_id,
+                "phone_number": phone_number,
+                "source": source,
+                "pre_populated": bool(user_data and source == "landing_chat")
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento da autorização WhatsApp: {str(e)}")
+            return {
+                "status": "authorization_error",
                 "error": str(e)
             }
 
     async def handle_phone_number_submission(self, phone_number: str, session_id: str) -> Dict[str, Any]:
         """Handle phone number submission from web interface."""
         try:
-            logger.info(f"📱 DEBUG: Phone number submission for session {session_id}: {phone_number}")
+            logger.info(f"Phone number submission for session {session_id}: {phone_number}")
             session_data = await get_user_session(session_id) or {}
             response = await self._handle_phone_collection(phone_number, session_id, session_data)
             return {
                 "status": "success",
                 "message": response,
-                "phone_submitted": True,
-                "flow_type": "fluxo_debug"
+                "phone_submitted": True
             }
         except Exception as e:
-            logger.error(f"❌ DEBUG: Error in phone submission: {str(e)}")
+            logger.error(f"Error in phone submission: {str(e)}")
             return {
                 "status": "error",
                 "message": "Erro ao processar número de WhatsApp",
@@ -958,35 +933,29 @@ Obrigado por escolher nossos serviços jurídicos! 🤝"""
     async def get_session_context(self, session_id: str) -> Dict[str, Any]:
         """Get current session context and status."""
         try:
-            logger.info(f"📊 DEBUG: Getting session context for {session_id}")
             session_data = await get_user_session(session_id)
             if not session_data:
-                logger.info(f"📊 DEBUG: No session found for {session_id}")
                 return {"exists": False}
 
             context = {
                 "exists": True,
                 "session_id": session_id,
                 "platform": session_data.get("platform", "unknown"),
-                "fallback_step": session_data.get("fallback_step"),
-                "lead_qualified": session_data.get("lead_qualified", False),
-                "fallback_completed": session_data.get("fallback_completed", False),
+                "current_step": session_data.get("current_step"),
+                "flow_completed": session_data.get("flow_completed", False),
                 "phone_submitted": session_data.get("phone_submitted", False),
+                "lawyers_notified": session_data.get("lawyers_notified", False),
                 "lead_data": session_data.get("lead_data", {}),
-                "validation_attempts": session_data.get("validation_attempts", {}),
-                "available_areas": ["Direito Penal", "Saúde/Liminares"],
-                "flow_type": "fluxo_debug",
                 "message_count": session_data.get("message_count", 0),
-                "created_at": session_data.get("created_at"),
-                "last_updated": session_data.get("last_updated"),
-                "session_started": session_data.get("session_started", False),
-                "flow_initialized": session_data.get("flow_initialized", False)
+                "qualification_score": self._calculate_qualification_score(
+                    session_data.get("lead_data", {}), 
+                    session_data.get("platform", "web")
+                )
             }
             
-            logger.info(f"📊 DEBUG: Session context: {context}")
             return context
         except Exception as e:
-            logger.error(f"❌ DEBUG: Error getting session context: {str(e)}")
+            logger.error(f"Error getting session context: {str(e)}")
             return {"exists": False, "error": str(e)}
 
 

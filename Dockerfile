@@ -1,35 +1,33 @@
-# Imagem base enxuta com Python 3.11
-FROM python:3.11-slim
+FROM node:18-slim
 
-# Instalar dependências de build (precisas para pacotes nativos)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    curl \
- && rm -rf /var/lib/apt/lists/*
-
-# Diretório de trabalho
 WORKDIR /app
 
-# Criar um usuário não-root para segurança
-RUN adduser --disabled-password --gecos '' appuser
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y curl git \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements e instalar pacotes Python
-COPY requirements.txt ./
-RUN pip install --upgrade pip \
- && pip install --no-cache-dir -r requirements.txt
+# Copiar package files da RAIZ (não da pasta whatsapp-bot)
+COPY package.json ./
+COPY package-lock.json ./
 
-# Copiar código da aplicação
-COPY app/ ./app/
+# Instalar dependências Node.js
+RUN npm install --production --no-audit --no-fund \
+    && npm cache clean --force
 
-# Ajustar permissões para o usuário appuser
-RUN chown -R appuser:appuser /app
+# Copiar código JavaScript da pasta whatsapp-bot
+COPY whatsapp-bot/whatsapp_baileys.js ./
 
-# Trocar para usuário não-root
+# Criar usuário não-root
+RUN addgroup --system appuser && \
+    adduser --system --ingroup appuser appuser && \
+    mkdir -p /app/whatsapp_session && \
+    chown -R appuser:appuser /app
+
 USER appuser
 
-# Expor a porta padrão do Cloud Run (internamente ele injeta $PORT)
 EXPOSE 8080
 
-# Comando de execução do Uvicorn (um worker é suficiente no Cloud Run)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["node", "whatsapp_baileys.js"]

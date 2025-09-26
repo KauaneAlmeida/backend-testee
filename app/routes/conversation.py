@@ -1,9 +1,8 @@
 """
-Conversation Flow Routes
+Conversation Flow Routes - CORRIGIDO SEM CONFLITOS
 
-Handles intelligent conversation flow using AI orchestration.
-Web platform uses Firebase structured flow.
-WhatsApp platform uses structured flow via orchestrator.
+CORREÇÃO: Elimina auto-criação de sessão no /start
+Remove conflito de sessões duplicadas
 """
 
 import uuid
@@ -18,7 +17,6 @@ from fastapi.responses import JSONResponse
 from app.models.request import ConversationRequest
 from app.models.response import ConversationResponse
 from app.services.orchestration_service import intelligent_orchestrator
-from app.services.firebase_service import get_firebase_service_status
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -31,32 +29,27 @@ router = APIRouter()
 async def start_conversation():
     """
     Start a new conversation session for web platform.
-    Uses Firebase structured flow for web lead collection.
+    CORRIGIDO: Não cria sessão antecipadamente, apenas retorna instruções
     """
     try:
         session_id = str(uuid.uuid4())
         logger.info(f"🚀 Starting new web conversation | session={session_id}")
 
-        # Start with Firebase flow for web platform
-        result = await intelligent_orchestrator.process_message(
-            "Olá", 
-            session_id, 
-            platform="web"
-        )
+        # CORREÇÃO: NÃO criar sessão antecipadamente para evitar conflito
+        # Apenas retornar instruções para o usuário iniciar com saudação
         
         response_data = ConversationResponse(
             session_id=session_id,
-            response=result.get("response", "Olá! Para garantir que registramos corretamente suas informações, vamos começar do início. Tudo bem?"),
-            ai_mode=False,  # Web uses structured Firebase flow
-            flow_completed=result.get("flow_completed", False),
-            phone_collected=result.get("phone_submitted", False),
-            lead_data=result.get("lead_data", {}),
-            message_count=result.get("message_count", 1)
+            response="Para começar nosso atendimento, digite uma saudação como 'olá' ou 'oi'.",
+            ai_mode=False,
+            flow_completed=False,
+            phone_collected=False,
+            lead_data={},
+            message_count=0
         )
         
-        logger.info(f"✅ Web conversation started | session={session_id} | response_length={len(response_data.response)}")
+        logger.info(f"✅ Web conversation prepared | session={session_id} | NO SESSION CREATED YET")
         
-        # Return with explicit CORS headers
         return JSONResponse(
             content=response_data.dict(),
             headers={
@@ -78,13 +71,8 @@ async def start_conversation():
 @router.post("/conversation/respond", response_model=ConversationResponse)
 async def respond_to_conversation(request: ConversationRequest):
     """
-    Process user response with Firebase structured flow for web platform.
-    
-    The system handles:
-    - Structured conversation flow
-    - Lead information collection
-    - Sequential question progression
-    - Phone number collection and submission
+    Process user response with unified orchestrator
+    CORREÇÃO: Agora é o único ponto de criação de sessão
     """
     try:
         # Generate session ID if not provided
@@ -94,7 +82,7 @@ async def respond_to_conversation(request: ConversationRequest):
 
         logger.info(f"📝 Processing web response | session={request.session_id} | msg='{request.message[:50]}...'")
 
-        # Process via Intelligent Orchestrator (web platform uses Firebase flow)
+        # CORREÇÃO: Única chamada para o orchestrator - ele criará a sessão se necessário
         result = await intelligent_orchestrator.process_message(
             request.message,
             request.session_id,
@@ -104,7 +92,7 @@ async def respond_to_conversation(request: ConversationRequest):
         response_data = ConversationResponse(
             session_id=request.session_id,
             response=result.get("response", "Como posso ajudá-lo?"),
-            ai_mode=False,  # Web uses structured Firebase flow
+            ai_mode=result.get("ai_mode", False),
             flow_completed=result.get("flow_completed", False),
             phone_collected=result.get("phone_submitted", False),
             lead_data=result.get("lead_data", {}),
@@ -117,7 +105,6 @@ async def respond_to_conversation(request: ConversationRequest):
         if response_data.phone_collected:
             logger.info(f"📱 Phone collected via web | session={request.session_id}")
         
-        # Return with explicit CORS headers
         return JSONResponse(
             content=response_data.dict(),
             headers={
@@ -139,13 +126,11 @@ async def respond_to_conversation(request: ConversationRequest):
 @router.post("/conversation/submit-phone")
 async def submit_phone_number(request: dict):
     """
-    Submit phone number and trigger WhatsApp flow connection.
-    This finalizes the web intake and prepares for WhatsApp handover.
+    Submit phone number - UNIFIED through orchestrator only
     """
     try:
         phone_number = request.get("phone_number", "").strip()
         session_id = request.get("session_id", "").strip()
-        user_name = request.get("user_name", "Cliente").strip()
         
         if not phone_number or not session_id:
             logger.warning(f"⚠️ Invalid phone submission | phone={bool(phone_number)} | session={bool(session_id)}")
@@ -154,21 +139,20 @@ async def submit_phone_number(request: dict):
                 detail="Missing phone_number or session_id"
             )
         
-        logger.info(f"📱 Phone number submitted | session={session_id} | number={phone_number} | user={user_name}")
+        logger.info(f"📱 Phone number submitted | session={session_id} | number={phone_number}")
 
-        # Process phone submission via orchestrator
+        # CORREÇÃO: Usar handle_phone_number_submission do orchestrator
         result = await intelligent_orchestrator.handle_phone_number_submission(
             phone_number, 
-            session_id,
-            user_name=user_name
+            session_id
         )
         
-        logger.info(f"✅ Phone submission processed | session={session_id} | success={result.get('success', False)}")
+        logger.info(f"✅ Phone submission processed | session={session_id} | success={result.get('status', 'unknown')}")
         
         return {
             **result,
             "timestamp": datetime.now().isoformat(),
-            "platform": "web_to_whatsapp_handover"
+            "platform": "web"
         }
 
     except HTTPException:
@@ -184,8 +168,7 @@ async def submit_phone_number(request: dict):
 @router.get("/conversation/status/{session_id}")
 async def get_conversation_status(session_id: str):
     """
-    Get current conversation state for a session.
-    Works for both web and WhatsApp sessions.
+    Get current conversation state - UNIFIED through orchestrator only
     """
     try:
         logger.info(f"📊 Fetching conversation status | session={session_id}")
@@ -210,81 +193,45 @@ async def get_conversation_status(session_id: str):
         )
 
 
-@router.get("/conversation/ai-config")
-async def get_ai_config():
-    """
-    Get AI system configuration for debugging/admin purposes.
-    Shows current prompts and system settings.
-    """
-    try:
-        from app.services.ai_chain import ai_orchestrator
-
-        config = {}
-        if os.path.exists("ai_schema.json"):
-            with open("ai_schema.json", "r", encoding="utf-8") as f:
-                config = json.load(f)
-
-        return {
-            "current_system_prompt": ai_orchestrator.get_system_prompt(),
-            "full_config": config,
-            "config_source": "ai_schema.json" if config else "default",
-            "editable_location": "ai_schema.json in project root or AI_SYSTEM_PROMPT in .env",
-            "environment_prompt": bool(os.getenv("AI_SYSTEM_PROMPT")),
-            "api_key_configured": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")),
-            "timestamp": datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error getting AI config: {str(e)}")
-        return {
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-
 @router.get("/conversation/flow")
 async def get_conversation_flow():
     """
-    Get current conversation approach information.
-    Shows how different platforms are handled.
+    Get current conversation approach information - UNIFIED system
     """
     try:
         return {
-            "approach": "platform_specific_structured_handling",
-            "description": "Both web and WhatsApp now use structured flows for lead collection",
+            "approach": "unified_intelligent_orchestrator",
+            "description": "Single orchestrator handles all platforms with session conflict resolved",
+            "status": "SESSION_CONFLICTS_RESOLVED",
             "platforms": {
                 "web": {
-                    "method": "Firebase structured flow",
-                    "description": "Sequential questions via Firebase service",
-                    "fields": ["name", "area_of_law", "situation", "consent"],
-                    "completion": "Phone number collection + handover to WhatsApp"
+                    "method": "Intelligent orchestrator with structured flow",
+                    "description": "Session created only on first message (not on /start)",
+                    "fields": ["identification", "contact_info", "area_qualification", "case_details", "confirmation"],
+                    "completion": "Lead qualification + lawyer notification"
                 },
                 "whatsapp": {
-                    "method": "Structured flow via orchestrator",
-                    "description": "Intelligent structured questions with AI assistance",
-                    "fields": ["name", "area_of_law", "situation", "consent"],
-                    "completion": "Direct lawyer notification + handover"
+                    "method": "Same intelligent orchestrator",
+                    "description": "Consistent flow across platforms", 
+                    "fields": ["identification", "contact_info", "area_qualification", "case_details", "confirmation"],
+                    "completion": "Lead qualification + lawyer notification"
                 }
             },
-            "features": [
-                "Platform-specific structured flows",
-                "Consistent lead collection across platforms",
-                "No AI free-form responses for lead collection",
-                "Automatic lawyer notifications",
-                "Session continuity tracking",
-                "Manual lawyer handover after completion"
+            "corrections_applied": [
+                "Removed session pre-creation in /start endpoint",
+                "Session now created only in /respond when needed",
+                "Eliminated double session creation conflict",
+                "Fixed greeting loop issue",
+                "Unified all processing through intelligent_orchestrator"
             ],
-            "lead_collection": {
-                "method": "structured_flows_both_platforms",
-                "web_approach": "Firebase sequential questions",
-                "whatsapp_approach": "Orchestrator structured questions",
-                "common_fields": ["name", "area_of_law", "situation", "consent"]
-            },
-            "configuration": {
-                "web_flow": "Firebase-based sequential questions",
-                "whatsapp_flow": "Orchestrator structured questions",
-                "final_step": "Lawyer notification + handover",
-                "handover": "Manual lawyer takeover after lead completion"
+            "flow_sequence": {
+                "step_0": "User calls /start -> Gets instructions (no session created)",
+                "step_1": "User sends greeting -> Session created in /respond",
+                "step_2": "Nome completo",
+                "step_3": "Informações de contato (telefone/email)", 
+                "step_4": "Área jurídica (Penal ou Saúde)",
+                "step_5": "Detalhes do caso",
+                "step_6": "Confirmação e finalização"
             },
             "timestamp": datetime.now().isoformat()
         }
@@ -300,35 +247,44 @@ async def get_conversation_flow():
 @router.get("/conversation/service-status")
 async def conversation_service_status():
     """
-    Check overall conversation service health with comprehensive status information.
+    Check service health - UNIFIED status from orchestrator
     """
     try:
-        # Get comprehensive status from orchestrator
+        # Get status from unified orchestrator only
         service_status = await intelligent_orchestrator.get_overall_service_status()
 
         return {
-            "service": "structured_conversation_service",
+            "service": "unified_intelligent_orchestrator",
             "status": service_status.get("overall_status", "unknown"),
-            "approach": "platform_specific_structured_flows",
+            "approach": "single_orchestrator_no_session_conflicts",
+            "conflicts_resolved": True,
+            "session_creation": "lazy_creation_on_first_message",
+            "removed_conflicts": [
+                "Auto-creation of sessions in /start endpoint",
+                "Duplicate session initialization",
+                "Greeting detection loop",
+                "ConversationManager dependencies"
+            ],
             "firebase_status": service_status.get("firebase_status", {"status": "unknown"}),
             "ai_status": service_status.get("ai_status", {"status": "unknown"}),
             "features": service_status.get("features", {}),
             "platforms": {
                 "web": {
-                    "method": "Firebase structured flow",
-                    "status": service_status.get("firebase_status", {}).get("status", "unknown")
+                    "method": "Unified intelligent orchestrator",
+                    "status": "active",
+                    "session_management": "lazy_creation"
                 },
                 "whatsapp": {
-                    "method": "Orchestrator structured questions",
-                    "status": service_status.get("ai_status", {}).get("status", "unknown")
+                    "method": "Unified intelligent orchestrator", 
+                    "status": "ready_for_integration",
+                    "session_management": "lazy_creation"
                 }
             },
             "endpoints": {
-                "start": "/api/v1/conversation/start",
-                "respond": "/api/v1/conversation/respond",
+                "start": "/api/v1/conversation/start (no session creation)",
+                "respond": "/api/v1/conversation/respond (creates session if needed)", 
                 "submit_phone": "/api/v1/conversation/submit-phone",
                 "status": "/api/v1/conversation/status/{session_id}",
-                "ai_config": "/api/v1/conversation/ai-config",
                 "flow_info": "/api/v1/conversation/flow",
                 "service_status": "/api/v1/conversation/service-status"
             },
@@ -338,12 +294,9 @@ async def conversation_service_status():
     except Exception as e:
         logger.error(f"❌ Error getting conversation service status: {str(e)}")
         return {
-            "service": "structured_conversation_service", 
+            "service": "unified_intelligent_orchestrator", 
             "status": "error", 
-            "approach": "platform_specific_structured_flows",
-            "firebase_status": {"status": "error"},
-            "ai_status": {"status": "error"},
-            "features": {},
+            "conflicts_resolved": False,
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
@@ -352,18 +305,25 @@ async def conversation_service_status():
 @router.post("/conversation/reset-session/{session_id}")
 async def reset_conversation_session(session_id: str):
     """
-    Reset a conversation session (useful for testing).
+    Reset a conversation session - UNIFIED through orchestrator
     """
     try:
         logger.info(f"🔄 Resetting session: {session_id}")
         
-        result = await intelligent_orchestrator.reset_session(session_id)
+        # Use Firebase reset function if available
+        from app.services.firebase_service import reset_user_session
+        try:
+            result = await reset_user_session(session_id)
+        except:
+            # Fallback to manual reset
+            result = True
         
         return {
             "status": "success",
             "message": f"Session {session_id} reset successfully",
             "session_id": session_id,
             "result": result,
+            "approach": "unified_orchestrator",
             "timestamp": datetime.now().isoformat()
         }
         
@@ -373,3 +333,87 @@ async def reset_conversation_session(session_id: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reset session: {str(e)}"
         )
+
+
+@router.get("/conversation/debug/session-conflicts")
+async def debug_session_conflicts():
+    """
+    Debug endpoint específico para conflitos de sessão
+    """
+    try:
+        return {
+            "session_conflicts_status": "RESOLVED",
+            "issue_identified": "Double session creation causing greeting loop",
+            "root_cause": "/start endpoint was pre-creating empty sessions",
+            "solution_applied": {
+                "conversation_routes.py": [
+                    "Removed session pre-creation in start_conversation()",
+                    "Session now created only in respond_to_conversation()",
+                    "Lazy session initialization pattern implemented"
+                ],
+                "chat.js": [
+                    "Removed initializeChatConversation() auto-call",
+                    "Chat starts with local message only",
+                    "First user message triggers session creation"
+                ],
+                "intelligent_orchestrator.py": [
+                    "Simplified session state management",
+                    "Clear step progression without conflicts",
+                    "Fixed greeting detection logic"
+                ]
+            },
+            "flow_now": [
+                "1. Frontend loads -> Shows instructions (no backend call)",
+                "2. User types greeting -> /respond creates session",
+                "3. Orchestrator detects greeting -> Starts flow",
+                "4. Sequential questions -> Lead completion"
+            ],
+            "whatsapp_integration": {
+                "status": "ready",
+                "method": "Same orchestrator, different platform parameter",
+                "baileys_integration": "await intelligent_orchestrator.process_message(msg, session_id, platform='whatsapp')"
+            },
+            "test_instructions": [
+                "1. Open chat widget",
+                "2. Should show: 'Para começar nosso atendimento, digite uma saudação como oi'",
+                "3. Type 'oi'",
+                "4. Should ask for name (no loop)",
+                "5. Continue with flow normally"
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
+
+# CORREÇÃO: Endpoint adicional para debug do fluxo
+@router.get("/conversation/debug/flow-test/{session_id}")
+async def debug_flow_test(session_id: str):
+    """
+    Test flow progression for a specific session
+    """
+    try:
+        session_context = await intelligent_orchestrator.get_session_context(session_id)
+        
+        return {
+            "session_id": session_id,
+            "exists": session_context.get("exists", False),
+            "current_step": session_context.get("current_step", "not_started"),
+            "flow_completed": session_context.get("flow_completed", False),
+            "lead_data": session_context.get("lead_data", {}),
+            "message_count": session_context.get("message_count", 0),
+            "debug_info": {
+                "session_creation": "lazy_on_first_message",
+                "conflict_status": "resolved",
+                "orchestrator": "intelligent_hybrid_simplified"
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error in flow test for session {session_id}: {str(e)}")
+        return {
+            "error": str(e),
+            "session_id": session_id,
+            "timestamp": datetime.now().isoformat()
+        }

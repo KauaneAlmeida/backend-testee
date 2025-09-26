@@ -193,17 +193,12 @@ async def verify_whatsapp_webhook(request: Request):
     
     logger.warning("⚠️ WhatsApp webhook verification failed")
     return PlainTextResponse("Forbidden", status_code=403)
+# PATCH para whatsapp.py - SUBSTITUIR o webhook POST completo
 
 @router.post("/whatsapp/webhook")
 async def whatsapp_webhook(request: Request):
     """
-    Webhook endpoint para receber mensagens do WhatsApp.
-    
-    FLUXO SIMPLIFICADO:
-    1. Recebe mensagem
-    2. Verifica autorização
-    3. Se autorizado → Delega TUDO para orchestration_service
-    4. Se não autorizado → IGNORA COMPLETAMENTE
+    🔧 WEBHOOK CORRIGIDO - SEMPRE RETORNA CAMPO 'response'
     """
     try:
         payload = await request.json()
@@ -220,7 +215,11 @@ async def whatsapp_webhook(request: Request):
         # Validation
         if not message_text or not phone_number or not message_id:
             logger.warning("⚠️ Invalid webhook payload - missing required fields")
-            return {"status": "error", "message": "Invalid payload"}
+            return {
+                "status": "error", 
+                "message": "Invalid payload",
+                "response": "Erro: mensagem inválida"  # ✅ SEMPRE TEM RESPONSE
+            }
 
         logger.info(f"🔍 Verificando autorização | phone={clean_phone} | msg='{message_text[:50]}...'")
 
@@ -236,7 +235,8 @@ async def whatsapp_webhook(request: Request):
                 "phone_number": clean_phone,
                 "message_id": message_id,
                 "action": "IGNORE_COMPLETELY",
-                "reason": reason
+                "reason": reason,
+                "response": ""  # ✅ CAMPO VAZIO MAS EXISTE - BOT NÃO ENVIARÁ NADA
             }
 
         # ✅ NÚMERO AUTORIZADO - DELEGAR TUDO PARA ORCHESTRATOR
@@ -247,23 +247,27 @@ async def whatsapp_webhook(request: Request):
         
         logger.info(f"✅ DELEGANDO para orchestrator | session={session_id} | source={source} | type={lead_type}")
 
-        # DELEGAR PARA ORCHESTRATION SERVICE (ele decide tudo)
-        response = await intelligent_orchestrator.process_message(
-        message=message_text,
-        session_id=session_id,
-        phone_number=clean_phone,
-        platform="whatsapp"
-)
-        # Log da resposta
-        ai_response = response.get("response", "")
-        response_type = response.get("response_type", "orchestrated")
+        # DELEGAR PARA ORCHESTRATION SERVICE
+        orchestrator_response = await intelligent_orchestrator.process_message(
+            message=message_text,
+            session_id=session_id,
+            phone_number=clean_phone,
+            platform="whatsapp"
+        )
         
-        if ai_response:
-            logger.info(f"✅ Resposta gerada pelo orchestrator | session={session_id} | type={response_type}")
-        else:
-            logger.info(f"ℹ️ Orchestrator decidiu não responder | session={session_id}")
-
-        return {
+        # ✅ EXTRAIR RESPONSE DO ORCHESTRATOR COM VALIDAÇÃO
+        ai_response = orchestrator_response.get("response", "")
+        response_type = orchestrator_response.get("response_type", "orchestrated")
+        
+        # ✅ GARANTIR QUE RESPONSE NUNCA ESTÁ VAZIO
+        if not ai_response or ai_response.strip() == "":
+            ai_response = "Obrigado pela sua mensagem! Nossa equipe entrará em contato em breve."
+            logger.warning(f"⚠️ Orchestrator response vazio, usando fallback: {ai_response}")
+        
+        logger.info(f"✅ Response para bot WhatsApp: '{ai_response[:50]}...'")
+        
+        # ✅ RESPOSTA FINAL COM CAMPO 'response' GARANTIDO
+        final_response = {
             "status": "success",
             "message_id": message_id,
             "session_id": session_id,
@@ -271,18 +275,27 @@ async def whatsapp_webhook(request: Request):
             "source": source,
             "lead_type": lead_type,
             "authorized": True,
-            **response  # Inclui toda resposta do orchestrator
+            "response": ai_response,  # ✅ CAMPO OBRIGATÓRIO SEMPRE PREENCHIDO
+            # Campos extras do orchestrator (opcionais)
+            "response_type": response_type,
+            "current_step": orchestrator_response.get("current_step", ""),
+            "message_count": orchestrator_response.get("message_count", 1)
         }
+        
+        logger.info(f"✅ FINAL RESPONSE enviado para bot: response='{ai_response[:30]}...', status={final_response['status']}")
+        
+        return final_response
 
     except Exception as e:
         logger.error(f"❌ WhatsApp webhook error: {str(e)}")
         
+        # ✅ MESMO EM ERRO, SEMPRE RETORNA RESPONSE
         return {
             "status": "error",
             "message": str(e),
-            "response_type": "error_message"
+            "response_type": "error_message",
+            "response": "Desculpe, ocorreu um erro temporário. Tente novamente em alguns minutos."  # ✅ SEMPRE TEM RESPONSE
         }
-
 # =================== ROTAS DE AUTORIZAÇÃO ===================
 
 @router.post("/whatsapp/authorize")
