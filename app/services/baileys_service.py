@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
     
 class BaileysWhatsAppService:
     def __init__(self, base_url: str = None):
-        self.base_url = base_url or os.getenv("WHATSAPP_BOT_URL", "https://whatsapp-bot-936902782519.us-central1.run.app")
+        self.base_url = base_url or os.getenv("WHATSAPP_BOT_URL", "http://34.27.244.115:8081")
         self.timeout = 10  # ✅ Timeout mais agressivo
         self.max_retries = 2  # ✅ Menos tentativas
         self.initialized = False
@@ -93,7 +93,7 @@ class BaileysWhatsAppService:
                     clean_phone = f"55{clean_phone}"
                 phone_number = f"{clean_phone}@s.whatsapp.net"
 
-            payload = {"to": phone_number, "message": message}
+            payload = {"phone_number": phone_number, "message": message}
             logger.info(f"📤 Sending WhatsApp message to {phone_number[:15]}...")
 
             # ✅ Timeout com asyncio.wait_for
@@ -145,7 +145,7 @@ class BaileysWhatsAppService:
                 loop.run_in_executor(
                     None,
                     lambda: requests.get(
-                        f"{self.base_url}/api/qr-status", 
+                        f"{self.base_url}/health",
                         timeout=5  # 5s timeout para status
                     )
                 ),

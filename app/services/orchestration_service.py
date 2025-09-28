@@ -832,6 +832,11 @@ Em alguns minutos, um especialista entrará em contato."""
                 )
             }
             
+            # ✅ GARANTIR QUE RESPONSE SEMPRE EXISTE E É STRING
+            if not result.get("response") or not isinstance(result["response"], str):
+                result["response"] = "Como posso ajudá-lo hoje?"
+                logger.warning(f"⚠️ Response vazio corrigido para session {session_id}")
+            
             return result
 
         except Exception as e:
@@ -840,7 +845,7 @@ Em alguns minutos, um especialista entrará em contato."""
                 "response_type": "orchestration_error",
                 "platform": platform,
                 "session_id": session_id,
-                "response": self._get_personalized_greeting(),
+                "response": self._get_personalized_greeting() or "Olá! Como posso ajudá-lo?",
                 "error": str(e)
             }
 

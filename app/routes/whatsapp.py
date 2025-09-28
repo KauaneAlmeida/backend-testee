@@ -259,10 +259,10 @@ async def whatsapp_webhook(request: Request):
         ai_response = orchestrator_response.get("response", "")
         response_type = orchestrator_response.get("response_type", "orchestrated")
         
-        # ✅ GARANTIR QUE RESPONSE NUNCA ESTÁ VAZIO
-        if not ai_response or ai_response.strip() == "":
+        # ✅ GARANTIR QUE RESPONSE NUNCA ESTÁ VAZIO - CORRIGIDO
+        if not ai_response or not isinstance(ai_response, str) or ai_response.strip() == "":
             ai_response = "Obrigado pela sua mensagem! Nossa equipe entrará em contato em breve."
-            logger.warning(f"⚠️ Orchestrator response vazio, usando fallback: {ai_response}")
+            logger.warning(f"⚠️ Orchestrator response vazio ou inválido, usando fallback: {ai_response}")
         
         logger.info(f"✅ Response para bot WhatsApp: '{ai_response[:50]}...'")
         
@@ -289,12 +289,14 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         logger.error(f"❌ WhatsApp webhook error: {str(e)}")
         
-        # ✅ MESMO EM ERRO, SEMPRE RETORNA RESPONSE
+        # ✅ MESMO EM ERRO, SEMPRE RETORNA RESPONSE - GARANTIDO
         return {
             "status": "error",
             "message": str(e),
             "response_type": "error_message",
-            "response": "Desculpe, ocorreu um erro temporário. Tente novamente em alguns minutos."  # ✅ SEMPRE TEM RESPONSE
+            "response": "Desculpe, ocorreu um erro temporário. Tente novamente em alguns minutos.",  # ✅ SEMPRE TEM RESPONSE
+            "phone_number": clean_phone if 'clean_phone' in locals() else "",
+            "message_id": message_id if 'message_id' in locals() else ""
         }
 # =================== ROTAS DE AUTORIZAÇÃO ===================
 
