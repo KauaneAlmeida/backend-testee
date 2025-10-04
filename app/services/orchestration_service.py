@@ -14,7 +14,7 @@ from app.services.firebase_service import (
     get_firebase_service_status
 )
 from app.services.ai_chain import ai_orchestrator
-from app.services.baileys_service import baileys_service
+from app.services.evolution_service import evolution_service
 from app.services.lawyer_notification_service import lawyer_notification_service
 
 logger = logging.getLogger(__name__)
@@ -938,13 +938,14 @@ Você fez a escolha certa ao confiar no m.lima para {msgs['benefit']}.
             whatsapp_success = False
             if platform == "web":
                 strategic_message = self._get_strategic_whatsapp_message(user_name, area, phone_formatted)
-                
-                whatsapp_number = f"{phone_formatted}@s.whatsapp.net"
-                
+
                 try:
-                    await baileys_service.send_whatsapp_message(whatsapp_number, strategic_message)
-                    logger.info(f"📱 WhatsApp estratégico enviado com sucesso para {phone_formatted}")
-                    whatsapp_success = True
+                    send_result = await evolution_service.send_text_message(phone_formatted, strategic_message)
+                    if send_result.get("success"):
+                        logger.info(f"📱 WhatsApp estratégico enviado com sucesso para {phone_formatted}")
+                        whatsapp_success = True
+                    else:
+                        logger.error(f"❌ Erro ao enviar WhatsApp estratégico: {send_result.get('error')}")
                 except Exception as whatsapp_error:
                     logger.error(f"❌ Erro ao enviar WhatsApp estratégico: {str(whatsapp_error)}")
 
