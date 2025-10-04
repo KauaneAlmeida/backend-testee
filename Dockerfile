@@ -1,35 +1,55 @@
-# Imagem base enxuta com Python 3.11
+# ==========================================
+# DOCKERFILE OTIMIZADO PARA CLOUD RUN
+# ==========================================
+
+# Imagem base Python 3.11 slim
 FROM python:3.11-slim
 
-# Instalar dependências de build (precisas para pacotes nativos)
-RUN apt-get update && apt-get install -y \
+# Metadata
+LABEL maintainer="law-firm-backend"
+LABEL version="2.0.0"
+
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     curl \
- && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
-# Diretório de trabalho
+# Criar diretório de trabalho
 WORKDIR /app
 
-# Criar um usuário não-root para segurança
-RUN adduser --disabled-password --gecos '' appuser
+# Criar usuário não-root (segurança)
+RUN adduser --disabled-password --gecos '' --uid 1000 appuser
 
-# Copiar requirements e instalar pacotes Python
-COPY requirements.txt ./
-RUN pip install --upgrade pip \
- && pip install --no-cache-dir -r requirements.txt
+# Copiar e instalar dependências Python PRIMEIRO (cache otimizado)
+COPY requirements.txt ./ 
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copiar código da aplicação
 COPY app/ ./app/
 
-# Ajustar permissões para o usuário appuser
-RUN chown -R appuser:appuser /app
+# Criar diretório para logs
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app
 
-# Trocar para usuário não-root
+# Mudar para usuário não-root
 USER appuser
 
-# Expor a porta padrão do Cloud Run (internamente ele injeta $PORT)
+# Porta que Cloud Run espera ($PORT é injetada automaticamente)
 EXPOSE 8080
 
-# Comando de execução do Uvicorn (um worker é suficiente no Cloud Run)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+# Variáveis de ambiente padrão para produção
+ENV ENABLE_BAILEYS=false \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Health check otimizado
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
+
+# ==========================================
+# ✅ COMANDO DE INICIALIZAÇÃO CRÍTICO
+# ==========================================
+# Cloud Run executa este comando
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --timeout-keep-alive 300

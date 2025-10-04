@@ -35,20 +35,38 @@ async def start_conversation():
         session_id = str(uuid.uuid4())
         logger.info(f"🚀 Starting new web conversation | session={session_id}")
 
-        # CORREÇÃO: NÃO criar sessão antecipadamente para evitar conflito
-        # Apenas retornar instruções para o usuário iniciar com saudação
+        # Get personalized greeting from orchestrator (includes bom dia/boa tarde/boa noite)
+        personalized_greeting = intelligent_orchestrator._get_personalized_greeting()
+
+        # Criar sessão inicial com estado de greeting
+        session_data = {
+            "session_id": session_id,
+            "platform": "web",
+            "created_at": datetime.now(),
+            "current_step": "greeting",
+            "lead_data": {},
+            "message_count": 0,
+            "flow_completed": False,
+            "phone_submitted": False,
+            "lawyers_notified": False,
+            "last_updated": datetime.now(),
+            "first_interaction": True
+        }
+        
+        from app.services.firebase_service import save_user_session
+        await save_user_session(session_id, session_data)
         
         response_data = ConversationResponse(
             session_id=session_id,
-            response="Para começar nosso atendimento, digite uma saudação como 'olá' ou 'oi'.",
+            response=personalized_greeting,
             ai_mode=False,
             flow_completed=False,
             phone_collected=False,
-            lead_data={},
-            message_count=0
+            lead_data=session_data["lead_data"],
+            message_count=session_data["message_count"]
         )
         
-        logger.info(f"✅ Web conversation prepared | session={session_id} | NO SESSION CREATED YET")
+        logger.info(f"✅ Web conversation started | session={session_id}")
         
         return JSONResponse(
             content=response_data.dict(),
@@ -72,17 +90,17 @@ async def start_conversation():
 async def respond_to_conversation(request: ConversationRequest):
     """
     Process user response with unified orchestrator
-    CORREÇÃO: Agora é o único ponto de criação de sessão
     """
     try:
-        # Generate session ID if not provided
         if not request.session_id:
-            request.session_id = str(uuid.uuid4())
-            logger.info(f"🆕 Generated new web session: {request.session_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Session ID is required. Please start a conversation first."
+            )
 
         logger.info(f"📝 Processing web response | session={request.session_id} | msg='{request.message[:50]}...'")
 
-        # CORREÇÃO: Única chamada para o orchestrator - ele criará a sessão se necessário
+        # Process message through orchestrator
         result = await intelligent_orchestrator.process_message(
             request.message,
             request.session_id,

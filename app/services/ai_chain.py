@@ -1,16 +1,17 @@
 """
-LangChain + Gemini Integration Service
+AI Chain Service with LangChain + Gemini Integration (Fallback Ready)
 
-Este módulo integra o LangChain com o Google Gemini para gerenciamento de
-conversas inteligentes, memória e geração de respostas contextuais.
+Este módulo gerencia conversas usando LangChain + Gemini,
+mas também funciona em "modo fallback" caso não exista GEMINI_API_KEY.
 """
 
 import os
-import logging
 import json
-import asyncio
+import logging
 from typing import Dict, Any, Optional
-from dotenv import load_dotenv
+from datetime import datetime
+
+# LangChain imports
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.schema import HumanMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -18,324 +19,214 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 
-# Load environment variables
-load_dotenv()
-
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Global conversation memories
+# Global conversation memories (session-based)
 conversation_memories: Dict[str, ConversationBufferWindowMemory] = {}
+
+# AI configuration
+AI_CONFIG_FILE = "app/ai_schema.json"
+DEFAULT_MODEL = "gemini-1.5-flash"
+DEFAULT_TEMPERATURE = 0.7
+DEFAULT_MAX_TOKENS = 1000
+MEMORY_WINDOW = 10
+
+
+def load_ai_config() -> Dict[str, Any]:
+    try:
+        if os.path.exists(AI_CONFIG_FILE):
+            with open(AI_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                logger.info("✅ AI configuration loaded from file")
+                return config
+        else:
+            logger.warning("⚠️ AI config file not found, using defaults")
+            return get_default_ai_config()
+    except Exception as e:
+        logger.error(f"❌ Error loading AI config: {str(e)}")
+        return get_default_ai_config()
+
+
+def get_default_ai_config() -> Dict[str, Any]:
+    return {
+        "system_prompt": "Você é um assistente jurídico do escritório. "
+                         "Mantenha respostas claras, profissionais e em português.",
+        "ai_config": {
+            "model": DEFAULT_MODEL,
+            "temperature": DEFAULT_TEMPERATURE,
+            "max_tokens": DEFAULT_MAX_TOKENS,
+            "memory_window": MEMORY_WINDOW,
+            "timeout": 30
+        }
+    }
+
+
+def get_conversation_memory(session_id: str) -> ConversationBufferWindowMemory:
+    if session_id not in conversation_memories:
+        conversation_memories[session_id] = ConversationBufferWindowMemory(
+            k=MEMORY_WINDOW,
+            return_messages=True,
+            memory_key="chat_history"
+        )
+        logger.info(f"🧠 Created new conversation memory for session: {session_id}")
+    return conversation_memories[session_id]
+
+
+def clear_conversation_memory(session_id: str) -> bool:
+    try:
+        if session_id in conversation_memories:
+            conversation_memories[session_id].clear()
+            logger.info(f"🧹 Cleared conversation memory for session: {session_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error clearing memory for session {session_id}: {str(e)}")
+        return False
+
+
+def get_conversation_summary(session_id: str) -> str:
+    try:
+        if session_id in conversation_memories:
+            memory = conversation_memories[session_id]
+            messages = memory.chat_memory.messages
+            if not messages:
+                return "No conversation history"
+
+            summary_parts = []
+            for message in messages[-6:]:
+                if isinstance(message, HumanMessage):
+                    summary_parts.append(f"User: {message.content[:100]}...")
+                elif isinstance(message, AIMessage):
+                    summary_parts.append(f"AI: {message.content[:100]}...")
+            return "\n".join(summary_parts)
+        return "No conversation found"
+    except Exception as e:
+        logger.error(f"❌ Error getting conversation summary: {str(e)}")
+        return "Error retrieving summary"
 
 
 class AIOrchestrator:
-    """AI Orchestrator using LangChain + Gemini for intelligent conversation management."""
-
     def __init__(self):
+        self.config = load_ai_config()
+        self.ai_config = self.config.get("ai_config", {})
+        self.system_prompt = self.config.get("system_prompt", "")
         self.llm = None
-        self.system_prompt = None
         self.chain = None
+        self.fallback_mode = False
         self._initialize_llm()
-        self._load_system_prompt()
-        self._setup_chain()
 
     def _initialize_llm(self):
-        """Initialize Gemini LLM via LangChain."""
         try:
-            # Get API key from environment - try both variable names
-            api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-            
+            api_key = os.getenv("GEMINI_API_KEY")
             if not api_key:
-                logger.warning("⚠️ GOOGLE_API_KEY or GEMINI_API_KEY environment variable not set")
-                self.llm = None
+                logger.warning("⚠️ GEMINI_API_KEY não configurada. IA em modo fallback.")
+                self.fallback_mode = True
                 return
 
             self.llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
-                google_api_key=api_key,
-                temperature=0.7,
-                max_tokens=1000,
-                timeout=30,
-                convert_system_message_to_human=True
+                model=self.ai_config.get("model", DEFAULT_MODEL),
+                temperature=self.ai_config.get("temperature", DEFAULT_TEMPERATURE),
+                max_tokens=self.ai_config.get("max_tokens", DEFAULT_MAX_TOKENS),
+                google_api_key=api_key
             )
-            logger.info("✅ LangChain + Gemini LLM initialized successfully")
+            self._create_chain()
+            logger.info(f"✅ AI Orchestrator initialized with model: {self.ai_config.get('model', DEFAULT_MODEL)}")
         except Exception as e:
-            logger.error(f"❌ Error initializing LLM: {str(e)}")
+            logger.error(f"❌ Error initializing AI Orchestrator: {str(e)}")
+            self.fallback_mode = True
             self.llm = None
+            self.chain = None
 
-    def _load_system_prompt(self):
-        """Load system prompt from .env, JSON file, or use default."""
+    def _create_chain(self):
+        if not self.llm:
+            return
         try:
-            env_prompt = os.getenv("AI_SYSTEM_PROMPT")
-            if env_prompt:
-                self.system_prompt = env_prompt
-                logger.info("✅ System prompt loaded from environment variable")
-                return
-
-            schema_file = "ai_schema.json"
-            if os.path.exists(schema_file):
-                with open(schema_file, "r", encoding="utf-8") as f:
-                    schema_data = json.load(f)
-                    self.system_prompt = schema_data.get("system_prompt", "")
-                    if self.system_prompt:
-                        logger.info("✅ System prompt loaded from ai_schema.json")
-                        return
-
-            self.system_prompt = self._get_default_system_prompt()
-            logger.info("✅ Using default system prompt")
-            
-        except Exception as e:
-            logger.error(f"❌ Error loading system prompt: {str(e)}")
-            self.system_prompt = self._get_default_system_prompt()
-
-    def _get_default_system_prompt(self) -> str:
-        """Default system prompt para coleta de informações jurídicas no WhatsApp."""
-        return """Você é um assistente virtual de um escritório de advocacia no Brasil. 
-Seu papel é apenas **coletar informações básicas do cliente** para que um advogado humano dê continuidade.
-
-
-## INFORMAÇÕES A COLETAR:
-1. Nome completo.
-2. Área jurídica (apenas Penal ou Saúde Liminar).
-3. Breve descrição da situação.
-4. Número de WhatsApp válido (com DDD).
-5. Encerrar agradecendo e avisando que o time jurídico entrará em contato.
-
-## REGRAS IMPORTANTES:
-- Sempre responda em português brasileiro.
-- Não repita a mesma pergunta da mesma forma se o cliente não souber responder; reformule de forma natural.
-- Nunca ofereça agendamento automático ou horários de consulta.
-- Não escreva textos longos: use no máximo 2 frases por resposta.
-- Confirme cada informação antes de seguir para a próxima.
-- A ordem da coleta é: Nome completo → Área jurídica (Penal ou Saúde Liminar) → Descrição da situação → Número de WhatsApp.
-- Peça o número de WhatsApp **somente no final**.
-- Use linguagem simples, direta e acolhedora.
-- Sempre caminhe para coletar todas as informações, sem pressionar.
-- Para área jurídica, aceite apenas "Penal" ou "Saúde Liminar" - não aceite outras áreas.
-
-## FORMATO DA CONVERSA:
-- Seja objetivo e humano, como em uma conversa normal de WhatsApp.
-- Sempre finalize cada mensagem com uma pergunta que leve o cliente a responder.
-- Se já tiver a resposta de algum item no contexto, não repita a pergunta.
-
-Você **não agenda consultas**, apenas coleta as informações e organiza para o time jurídico."""
-
-    def _setup_chain(self):
-        """Create LangChain conversation chain."""
-        try:
-            if self.llm is None:
-                logger.warning("⚠️ Cannot setup chain - LLM not initialized")
-                self.chain = None
-                return
-                
             prompt = ChatPromptTemplate.from_messages([
                 ("system", self.system_prompt),
-                MessagesPlaceholder(variable_name="history"),
-                ("human", "{input}"),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{input}")
             ])
-
             self.chain = (
                 RunnablePassthrough.assign(
-                    history=lambda x: self._get_session_history(
-                        x.get("session_id", "default")
-                    )
+                    chat_history=lambda x: x["chat_history"]
                 )
                 | prompt
                 | self.llm
                 | StrOutputParser()
             )
-            logger.info("✅ LangChain conversation chain setup complete")
+            logger.info("✅ LangChain conversation chain created")
         except Exception as e:
-            logger.error(f"❌ Error setting up chain: {str(e)}")
+            logger.error(f"❌ Error creating conversation chain: {str(e)}")
             self.chain = None
 
-    def _get_session_history(self, session_id: str) -> list:
-        """Get session conversation history."""
-        if session_id not in conversation_memories:
-            conversation_memories[session_id] = ConversationBufferWindowMemory(
-                k=10, return_messages=True
-            )
-        return conversation_memories[session_id].chat_memory.messages
-
     async def generate_response(
-        self, 
-        message: str, 
+        self,
+        message: str,
         session_id: str = "default",
         context: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Generate AI response using LangChain + Gemini with context."""
         try:
-            if self.llm is None:
-                raise Exception("LLM not initialized - check API key configuration")
-                
-            if session_id not in conversation_memories:
-                conversation_memories[session_id] = ConversationBufferWindowMemory(
-                    k=10, return_messages=True
-                )
+            # Modo fallback → sem IA real
+            if self.fallback_mode or not self.chain:
+                logger.info("⚠️ Fallback mode ativo, retornando resposta padrão")
+                return f"Recebi sua mensagem: '{message}'. Nossa equipe retornará em breve."
 
-            memory = conversation_memories[session_id]
-            
-            contextual_message = message
-            if context and isinstance(context, dict):
-                context_info = []
-                if context.get("name"):
-                    context_info.append(f"Nome: {context['name']}")
-                if context.get("area_of_law"):
-                    context_info.append(f"Área jurídica: {context['area_of_law']}")
-                if context.get("situation"):
-                    context_info.append(f"Situação: {context['situation']}")
-                if context.get("platform"):
-                    context_info.append(f"Plataforma: {context['platform']}")
-                
-                if context_info:
-                    contextual_message = f"[Contexto: {'; '.join(context_info)}] {message}"
+            memory = get_conversation_memory(session_id)
+            enhanced_message = message
+            if context and context.get("platform"):
+                platform = context["platform"].upper()
+                enhanced_message = f"[Platform: {platform}] {message}"
 
-            # Add timeout and better error handling
-            
-            try:
-                response = await asyncio.wait_for(
-                    self.chain.ainvoke({
-                        "input": contextual_message, 
-                        "session_id": session_id
-                    }),
-                    timeout=15.0  # 15 second timeout
-                )
-            except asyncio.TimeoutError:
-                logger.error("⏰ Gemini API request timed out")
-                raise Exception("API timeout - quota may be exceeded")
-            except Exception as api_error:
-                # Check for quota/rate limit errors
-                error_str = str(api_error).lower()
-                if any(indicator in error_str for indicator in ["429", "quota", "rate limit", "resourceexhausted", "billing"]):
-                    logger.error(f"🚫 Gemini API quota/rate limit error: {api_error}")
-                    raise Exception(f"Quota exceeded: {api_error}")
-                else:
-                    logger.error(f"❌ Gemini API error: {api_error}")
-                    raise api_error
+            chain_input = {
+                "input": enhanced_message,
+                "chat_history": memory.chat_memory.messages
+            }
 
-            memory.chat_memory.add_user_message(message)
-            memory.chat_memory.add_ai_message(response)
-
-            logger.info(f"✅ Generated AI response for session {session_id}")
+            response = await self.chain.ainvoke(chain_input)
+            memory.save_context({"input": enhanced_message}, {"output": response})
             return response
-
         except Exception as e:
-            logger.error(f"❌ Error generating response: {str(e)}")
-            # Re-raise the exception so orchestrator can handle it properly
-            raise e
+            logger.error(f"❌ Error generating AI response: {str(e)}")
+            return "Desculpe, ocorreu um erro ao processar sua mensagem."
 
-    def _get_fallback_response(self) -> str:
-        """Fallback response when AI fails."""
-        return (
-            "Peço desculpas, mas estou enfrentando dificuldades técnicas no momento.\n\n"
-            "Para garantir que você receba o melhor atendimento jurídico, recomendo "
-            "que entre em contato diretamente com nossa equipe pelo telefone "
-            "ou agende uma consulta presencial."
-        )
-
-    def clear_session_memory(self, session_id: str):
-        """Clear memory for a specific session."""
-        if session_id in conversation_memories:
-            del conversation_memories[session_id]
-            logger.info(f"🧹 Cleared memory for session {session_id}")
-
-    def get_conversation_summary(self, session_id: str) -> Dict[str, Any]:
-        """Get conversation summary for a session."""
-        if session_id not in conversation_memories:
-            return {"messages": 0, "summary": "No conversation history"}
-
-        messages = conversation_memories[session_id].chat_memory.messages
-        return {
-            "messages": len(messages),
-            "last_messages": [
-                {
-                    "type": "human" if isinstance(m, HumanMessage) else "ai",
-                    "content": m.content[:100] + ("..." if len(m.content) > 100 else ""),
-                }
-                for m in messages[-4:]
-            ],
-        }
-
-    def get_system_prompt(self) -> str:
-        """Get current system prompt."""
-        return self.system_prompt
+    def is_available(self) -> bool:
+        return not self.fallback_mode and self.llm is not None and self.chain is not None
 
 
-# Global AI orchestrator instance
+# Global AI orchestrator
 ai_orchestrator = AIOrchestrator()
 
 
-# Convenience functions for backward compatibility
-async def process_chat_message(
-    message: str, 
-    session_id: str = "default", 
-    context: Optional[Dict[str, Any]] = None
-) -> str:
-    """Process chat message with LangChain + Gemini."""
-    return await ai_orchestrator.generate_response(message, session_id, context)
-
-
-def clear_conversation_memory(session_id: str):
-    """Clear conversation memory for session."""
-    ai_orchestrator.clear_session_memory(session_id)
-
-
-def get_conversation_summary(session_id: str) -> Dict[str, Any]:
-    """Get conversation summary."""
-    return ai_orchestrator.get_conversation_summary(session_id)
+async def process_chat_message(message: str, session_id: str = "default", context: Optional[Dict[str, Any]] = None) -> str:
+    try:
+        if not ai_orchestrator.is_available():
+            return f"Recebi sua mensagem: '{message}'. Nossa equipe vai entrar em contato em breve."
+        return await ai_orchestrator.generate_response(message, session_id, context)
+    except Exception as e:
+        logger.error(f"❌ Error in process_chat_message: {str(e)}")
+        return "Desculpe, ocorreu um erro inesperado."
 
 
 async def get_ai_service_status() -> Dict[str, Any]:
-    """Get AI service status."""
     try:
-        # Quick test without generating a full response to avoid quota usage
-        api_key_configured = bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"))
-        
-        if not api_key_configured:
-            return {
-                "service": "ai_service",
-                "status": "configuration_required",
-                "error": "API key not configured",
-                "api_key_configured": False,
-                "configuration_required": True,
-            }
-        
-        # Test LLM initialization without making API calls
-        if ai_orchestrator.llm is None:
-            return {
-                "service": "ai_service",
-                "status": "error",
-                "error": "LLM not initialized",
-                "api_key_configured": api_key_configured,
-                "configuration_required": True,
-            }
-
+        api_key_configured = bool(os.getenv("GEMINI_API_KEY"))
+        ai_available = ai_orchestrator.is_available()
         return {
-            "service": "ai_service",
-            "status": "active",
-            "message": "LangChain + Gemini operational",
-            "llm_initialized": True,
-            "system_prompt_configured": bool(ai_orchestrator.system_prompt),
+            "service": "ai_chain_langchain_gemini",
+            "status": "active" if ai_available else "fallback",
+            "ai_available": ai_available,
             "api_key_configured": api_key_configured,
+            "model": ai_orchestrator.ai_config.get("model", DEFAULT_MODEL),
+            "memory_sessions": len(conversation_memories),
             "features": [
                 "langchain_integration",
-                "gemini_api",
                 "conversation_memory",
+                "google_gemini_api" if ai_available else "fallback_mode",
                 "session_management",
-                "context_awareness",
-                "brazilian_portuguese_responses",
-            ],
+                "context_awareness"
+            ]
         }
     except Exception as e:
-        logger.error(f"❌ Error checking AI service status: {str(e)}")
-        return {
-            "service": "ai_service",
-            "status": "error",
-            "error": str(e),
-            "configuration_required": True,
-            "api_key_configured": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")),
-        }
-
-
-# Alias for compatibility
-process_with_langchain = process_chat_message
+        logger.error(f"❌ Error getting AI service status: {str(e)}")
+        return {"service": "ai_chain_langchain_gemini", "status": "error", "error": str(e)}
